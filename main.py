@@ -1,10 +1,8 @@
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse
-from sqlalchemy import create_engine,text
-from dotenv import load_dotenv
-import os
+from db import obtener_categorias
+from models import CategoriaOut
 
-load_dotenv()
 
 app = FastAPI(
     title="Vercel + FastAPI",
@@ -25,21 +23,10 @@ def get_sample_data():
         "timestamp": "2024-01-01T00:00:00Z"
     }
 
-@app.get("/api/db/version")
-def get_db_version():
-    DATABASE_URL = os.getenv("DATABASE_URL")
-
-    # Create SQLAlchemy engine
-    engine = create_engine(DATABASE_URL)
-
-    # Test connection
-    with engine.connect() as conn:
-        result = conn.execute(text("SELECT version();"))
-        version = result.scalar()
-    
-    return {
-        "version": version
-    }
+@app.get("/api/categorias", response_model=list[CategoriaOut])
+def get_categorias():
+    categorias = obtener_categorias()
+    return categorias
 
 
 @app.get("/api/items/{item_id}")
