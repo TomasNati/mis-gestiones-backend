@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse
-from db import obtener_categorias
-from models import CategoriaOut
+from db import obtener_categorias, obtener_subcategorias
+from models import CategoriaOut, SubcategoriaOut
 
 
 app = FastAPI(
@@ -27,6 +27,11 @@ def get_sample_data():
 def get_categorias():
     categorias = obtener_categorias()
     return categorias
+
+@app.get("/api/subcategorias", response_model=list[SubcategoriaOut])
+def get_subcategorias():
+    subcategorias = obtener_subcategorias()
+    return subcategorias
 
 
 @app.get("/api/items/{item_id}")
