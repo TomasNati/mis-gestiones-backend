@@ -2,35 +2,24 @@ from pydantic import BaseModel
 from typing import Optional
 import uuid
 
-class CategoriaOut(BaseModel):
+class CategoriBasicOut(BaseModel):
     id: uuid.UUID
     nombre: str
     comentarios: Optional[str]
-    subcategorias: list['SubcategoriaChildOut']
+
+class CategoriaOut(CategoriBasicOut):
+    subcategorias: list['SubcategoriaBasicOut']
 
     class Config:
         from_attributes = True
 
-class SubcategoriaChildOut(BaseModel):
+class SubcategoriaBasicOut(BaseModel):
     id: uuid.UUID
     nombre: str
     comentarios: Optional[str]
+
+class SubcategoriaOut(SubcategoriaBasicOut):
+    categoria: CategoriBasicOut
 
     class Config:
         from_attributes = True
-
-
-class CategoriParentOut(BaseModel):
-    id: uuid.UUID
-    nombre: str
-    comentarios: Optional[str]
-
-class SubcategoriaOut(BaseModel):
-    id: uuid.UUID
-    nombre: str
-    comentarios: Optional[str]
-    categoria: CategoriParentOut
-
-    class Config:
-        from_attributes = True
-
