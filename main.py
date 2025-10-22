@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse
+from fastapi.middleware.cors import CORSMiddleware
 from db import obtener_categorias, obtener_subcategorias
 from models import CategoriaOut, SubcategoriaOut
 
@@ -8,6 +9,18 @@ app = FastAPI(
     title="Vercel + FastAPI",
     description="Vercel + FastAPI",
     version="1.0.0",
+)
+
+origins = [
+    "http://localhost:5173",
+    "https://mis-gestiones-admin.vercel.app"
+]
+
+app.add_middleware( CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 
