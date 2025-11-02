@@ -1,8 +1,9 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
 from db import obtener_categorias, obtener_subcategorias
-from models import CategoriaOut, SubcategoriaOut
+import db
+from models import CategoriaOut, SubcategoriaOut, CategoriaBasicOut
 
 
 app = FastAPI(
@@ -40,6 +41,23 @@ def get_sample_data():
 def get_categorias():
     categorias = obtener_categorias()
     return categorias
+
+@app.put("/api/categoria/{id}", response_model=CategoriaBasicOut)
+def actualizar_categoria(id: str, categoria: CategoriaBasicOut):
+    if str(categoria.id).lower() != id.lower():
+        raise HTTPException(
+            status_code=400,
+            detail=f"ID mismatch: path ID is {id}, but body ID is {categoria.id}"
+        )
+    
+    categoria = db.actualizar_categoria(id, nombre=categoria.nombre)
+    
+    return CategoriaBasicOut.model_validate(categoria)
+
+@app.post("/api/categoria", response_model=CategoriaBasicOut)
+def crear_categoria(categoria: CategoriaBasicOut):
+    categoria = db.crear_categoria(nombre=categoria.nombre)
+    return CategoriaBasicOut.model_validate(categoria)
 
 @app.get("/api/subcategorias", response_model=list[SubcategoriaOut])
 def get_subcategorias():
