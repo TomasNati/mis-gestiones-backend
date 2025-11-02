@@ -1,7 +1,9 @@
-from fastapi import FastAPI, HTTPException
+from typing import Optional, Union
+from uuid import UUID
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
-from db import obtener_categorias, obtener_subcategorias
+from db import obtener_categoria_por_id, obtener_categorias, obtener_subcategorias
 import db
 from models import CategoriaOut, SubcategoriaOut, CategoriaBasicOut
 
@@ -25,22 +27,22 @@ app.add_middleware( CORSMiddleware,
 )
 
 
-@app.get("/api/data")
-def get_sample_data():
-    return {
-        "data": [
-            {"id": 1, "name": "Sample Item 1", "value": 100},
-            {"id": 2, "name": "Sample Item 2", "value": 200},
-            {"id": 3, "name": "Sample Item 3", "value": 300}
-        ],
-        "total": 3,
-        "timestamp": "2024-01-01T00:00:00Z"
-    }
-
 @app.get("/api/categorias", response_model=list[CategoriaOut])
 def get_categorias():
     categorias = obtener_categorias()
     return categorias
+
+@app.get("/api/categoria/{id}", response_model=Union[CategoriaOut, CategoriaBasicOut])
+def getCategoria(id: UUID, con_hijos: Optional[bool] = Query(None)):
+    categoria = obtener_categoria_por_id(id, con_hijos)
+    if not categoria:
+        raise HTTPException(status_code=404, detail="Categoría no encontrada")
+
+    if con_hijos:
+        return CategoriaOut.model_validate(categoria)
+    else:
+        return CategoriaBasicOut.model_validate(categoria)
+
 
 @app.put("/api/categoria/{id}", response_model=CategoriaBasicOut)
 def actualizar_categoria(id: str, categoria: CategoriaBasicOut):
@@ -63,19 +65,6 @@ def crear_categoria(categoria: CategoriaBasicOut):
 def get_subcategorias():
     subcategorias = obtener_subcategorias()
     return subcategorias
-
-
-@app.get("/api/items/{item_id}")
-def get_item(item_id: int):
-    return {
-        "item": {
-            "id": item_id,
-            "name": "Sample Item " + str(item_id),
-            "value": item_id * 100
-        },
-        "timestamp": "2024-01-01T00:00:00Z"
-    }
-
 
 @app.get("/", response_class=HTMLResponse)
 def read_root():

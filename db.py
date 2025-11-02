@@ -60,6 +60,20 @@ def obtener_categorias() -> Sequence[Categoria]:
 
     return categorias_activas
 
+def obtener_categoria_por_id(id: UUID, incluir_subcategorias: bool = False):
+    with Session(database.engine) as session:
+        query = (
+            select(Categoria)
+            .where(Categoria.id == id)
+        )
+        if incluir_subcategorias:
+            query = query.options(selectinload(Categoria.subcategorias))
+
+        result = session.execute(query)
+        categoria = result.scalars().first()
+
+    return categoria
+
 def actualizar_categoria(id: UUID, nombre: str) -> Categoria:
     with Session(database.engine) as session:
         categoria = session.get(Categoria, id)
