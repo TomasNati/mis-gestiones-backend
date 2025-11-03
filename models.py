@@ -2,10 +2,12 @@ from pydantic import BaseModel
 from typing import Optional
 import uuid
 
-class CategoriaBasicOut(BaseModel):
-    id: uuid.UUID
+class CategoriasCrear(BaseModel):
     nombre: str
-    comentarios: Optional[str]
+    comentarios: Optional[str] = None
+
+class CategoriaBasicOut(CategoriasCrear):
+    id: uuid.UUID
 
     class Config:
         from_attributes = True

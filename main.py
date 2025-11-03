@@ -5,7 +5,7 @@ from fastapi.responses import HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
 from db import obtener_categoria_por_id, obtener_categorias, obtener_subcategorias
 import db
-from models import CategoriaOut, SubcategoriaOut, CategoriaBasicOut
+from models import CategoriaOut, CategoriasCrear, SubcategoriaOut, CategoriaBasicOut
 
 
 app = FastAPI(
@@ -57,7 +57,7 @@ def actualizar_categoria(id: str, categoria: CategoriaBasicOut):
     return CategoriaBasicOut.model_validate(categoria)
 
 @app.post("/api/categoria", response_model=CategoriaBasicOut)
-def crear_categoria(categoria: CategoriaBasicOut):
+def crear_categoria(categoria: CategoriasCrear):
     categoria = db.crear_categoria(nombre=categoria.nombre)
     return CategoriaBasicOut.model_validate(categoria)
 
