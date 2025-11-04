@@ -5,6 +5,7 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, Session, relationship, selectinload
 from typing import Optional, Sequence
 import uuid
+import models
 
 load_dotenv()
 
@@ -115,6 +116,29 @@ def eliminar_categoria(id: uuid.UUID, eliminar_subcategorias: bool = False ):
         session.delete(categoria)
         session.commit()
 
+def crear_subcategoria(subcategoria: models.SubcategoriaCrear) -> Subcategoria:
+    with Session(database.engine) as session:
+        subcategoria = Subcategoria(
+            nombre=subcategoria.nombre, 
+            comentarios=subcategoria.comentarios,
+            categoriaId=subcategoria.categoriaId)
+        session.add(subcategoria)
+        session.commit()
+        session.refresh(subcategoria)
+        return subcategoria
+
+def obtener_subcategoria_por_id(id: UUID) -> Subcategoria:
+    with Session(database.engine) as session:
+        query = (
+            select(Subcategoria)
+            .options(selectinload(Subcategoria.categoria))
+            .where(Subcategoria.id == id)
+        )
+
+        result = session.execute(query)
+        subcategoria = result.scalars().first()
+
+        return subcategoria
 
 def obtener_subcategorias() -> Sequence[Subcategoria]:
     with Session(database.engine) as session:

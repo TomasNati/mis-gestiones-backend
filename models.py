@@ -18,10 +18,11 @@ class CategoriaOut(CategoriaBasicOut):
     class Config:
         from_attributes = True
 
-class SubcategoriaBasicOut(BaseModel):
+class SubcategoriaCrear(CategoriasCrear):
+    categoriaId: uuid.UUID
+
+class SubcategoriaBasicOut(SubcategoriaCrear):
     id: uuid.UUID
-    nombre: str
-    comentarios: Optional[str]
 
     class Config:
         from_attributes = True

@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from db import CategoriaDeletionError, obtener_categoria_por_id, obtener_categorias, obtener_subcategorias
 import db
 from models import CategoriaOut, CategoriasCrear, SubcategoriaOut, CategoriaBasicOut
+import models
 
 
 app = FastAPI(
@@ -70,6 +71,19 @@ def eliminar_categoria(id: UUID, eliminar: Optional[bool] = Query(None)):
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
+
+@app.post("/api/subcategoria", response_model=models.SubcategoriaCrear)
+def crear_subcategoria(subcategoria: models.SubcategoriaCrear):
+    subcategoria = db.crear_subcategoria(subcategoria=subcategoria)
+    return models.SubcategoriaBasicOut.model_validate(subcategoria)
+
+@app.get("/api/subcategoria/{id}", response_model=models.SubcategoriaOut)
+def get_subcategoria(id: UUID):
+    subcategoria = db.obtener_subcategoria_por_id(id)
+    if not subcategoria:
+        raise HTTPException(status_code=404, detail="Subcategoria no encontrada")
+
+    return models.SubcategoriaOut.model_validate(subcategoria)
 
 @app.get("/api/subcategorias", response_model=list[SubcategoriaOut])
 def get_subcategorias():
