@@ -16,6 +16,9 @@ class Database():
 
 database = Database()
 
+class CategoriaDeletionError(Exception):
+    pass
+
 class Base(DeclarativeBase):
     pass
 
@@ -90,6 +93,28 @@ def crear_categoria(nombre: str) -> Categoria:
         session.commit()
         session.refresh(categoria)
         return categoria
+    
+def eliminar_categoria(id: uuid.UUID, eliminar_subcategorias: bool = False ):
+    with Session(database.engine) as session:
+        categoria = session.execute(
+            select(Categoria)
+            .options(selectinload(Categoria.subcategorias))
+            .where(Categoria.id == id)
+        ).scalar_one_or_none()
+
+        if categoria is None:
+            raise CategoriaDeletionError(f"Categoria with id {id} not found.")
+        
+        has_children = bool(categoria.subcategorias)
+        if  has_children and not eliminar_subcategorias:
+            raise CategoriaDeletionError("Cannot delete Categoria with Subcategorias unless eliminar_subcategoria is True")
+        
+        if has_children and eliminar_subcategorias:
+            for sub in categoria.subcategorias:
+                session.delete(sub)
+        session.delete(categoria)
+        session.commit()
+
 
 def obtener_subcategorias() -> Sequence[Subcategoria]:
     with Session(database.engine) as session:

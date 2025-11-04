@@ -1,9 +1,9 @@
 from typing import Optional, Union
 from uuid import UUID
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, status
 from fastapi.responses import HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
-from db import obtener_categoria_por_id, obtener_categorias, obtener_subcategorias
+from db import CategoriaDeletionError, obtener_categoria_por_id, obtener_categorias, obtener_subcategorias
 import db
 from models import CategoriaOut, CategoriasCrear, SubcategoriaOut, CategoriaBasicOut
 
@@ -33,7 +33,7 @@ def get_categorias():
     return categorias
 
 @app.get("/api/categoria/{id}", response_model=Union[CategoriaOut, CategoriaBasicOut])
-def getCategoria(id: UUID, con_hijos: Optional[bool] = Query(None)):
+def get_categoria(id: UUID, con_hijos: Optional[bool] = Query(None)):
     categoria = obtener_categoria_por_id(id, con_hijos)
     if not categoria:
         raise HTTPException(status_code=404, detail="Categoría no encontrada")
@@ -60,6 +60,16 @@ def actualizar_categoria(id: str, categoria: CategoriaBasicOut):
 def crear_categoria(categoria: CategoriasCrear):
     categoria = db.crear_categoria(nombre=categoria.nombre)
     return CategoriaBasicOut.model_validate(categoria)
+
+@app.delete("/api/categoria/{id}", status_code=status.HTTP_204_NO_CONTENT)
+def eliminar_categoria(id: UUID, eliminar: Optional[bool] = Query(None)):
+    try:
+        db.eliminar_categoria(id, eliminar_subcategorias=eliminar)
+    except CategoriaDeletionError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
 
 @app.get("/api/subcategorias", response_model=list[SubcategoriaOut])
 def get_subcategorias():
