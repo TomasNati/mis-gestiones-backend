@@ -3,7 +3,7 @@ from uuid import UUID
 from fastapi import FastAPI, HTTPException, Query, status
 from fastapi.responses import HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
-from db import CategoriaDeletionError, obtener_categoria_por_id, obtener_categorias, obtener_subcategorias
+from db import CategoriaDeletionError, SubcategoriaDeletionError, obtener_categoria_por_id, obtener_categorias, obtener_subcategorias
 import db
 from models import CategoriaOut, CategoriasCrear, SubcategoriaOut, CategoriaBasicOut
 import models
@@ -28,12 +28,12 @@ app.add_middleware( CORSMiddleware,
 )
 
 
-@app.get("/api/categorias", response_model=list[CategoriaOut])
+@app.get("/api/categorias", response_model=list[CategoriaOut], tags=["Categoría"])
 def get_categorias():
     categorias = obtener_categorias()
     return categorias
 
-@app.get("/api/categoria/{id}", response_model=Union[CategoriaOut, CategoriaBasicOut])
+@app.get("/api/categoria/{id}", response_model=Union[CategoriaOut, CategoriaBasicOut], tags=["Categoría"])
 def get_categoria(id: UUID, con_hijos: Optional[bool] = Query(None)):
     categoria = obtener_categoria_por_id(id, con_hijos)
     if not categoria:
@@ -45,7 +45,7 @@ def get_categoria(id: UUID, con_hijos: Optional[bool] = Query(None)):
         return CategoriaBasicOut.model_validate(categoria)
 
 
-@app.put("/api/categoria/{id}", response_model=CategoriaBasicOut)
+@app.put("/api/categoria/{id}", response_model=CategoriaBasicOut, tags=["Categoría"])
 def actualizar_categoria(id: str, categoria: CategoriaBasicOut):
     if str(categoria.id).lower() != id.lower():
         raise HTTPException(
@@ -57,12 +57,12 @@ def actualizar_categoria(id: str, categoria: CategoriaBasicOut):
     
     return CategoriaBasicOut.model_validate(categoria)
 
-@app.post("/api/categoria", response_model=CategoriaBasicOut)
+@app.post("/api/categoria", response_model=CategoriaBasicOut, tags=["Categoría"])
 def crear_categoria(categoria: CategoriasCrear):
     categoria = db.crear_categoria(nombre=categoria.nombre)
     return CategoriaBasicOut.model_validate(categoria)
 
-@app.delete("/api/categoria/{id}", status_code=status.HTTP_204_NO_CONTENT)
+@app.delete("/api/categoria/{id}", status_code=status.HTTP_204_NO_CONTENT, tags=["Categoría"])
 def eliminar_categoria(id: UUID, eliminar: Optional[bool] = Query(None)):
     try:
         db.eliminar_categoria(id, eliminar_subcategorias=eliminar)
@@ -72,12 +72,17 @@ def eliminar_categoria(id: UUID, eliminar: Optional[bool] = Query(None)):
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 
-@app.post("/api/subcategoria", response_model=models.SubcategoriaCrear)
+@app.post("/api/subcategoria", response_model=models.SubcategoriaBasicOut, tags=["Subcategoría"])
 def crear_subcategoria(subcategoria: models.SubcategoriaCrear):
     subcategoria = db.crear_subcategoria(subcategoria=subcategoria)
     return models.SubcategoriaBasicOut.model_validate(subcategoria)
 
-@app.get("/api/subcategoria/{id}", response_model=models.SubcategoriaOut)
+@app.put("/api/subcategoria", response_model=models.SubcategoriaBasicOut, tags=["Subcategoría"])
+def actualizar_subcategoria(subcategoria: models.SubcategoriaBasicOut):
+    subcategoria = db.actualizar_subcategoria(subcategoria=subcategoria)
+    return models.SubcategoriaBasicOut.model_validate(subcategoria)
+
+@app.get("/api/subcategoria/{id}", response_model=models.SubcategoriaOut, tags=["Subcategoría"])
 def get_subcategoria(id: UUID):
     subcategoria = db.obtener_subcategoria_por_id(id)
     if not subcategoria:
@@ -85,10 +90,19 @@ def get_subcategoria(id: UUID):
 
     return models.SubcategoriaOut.model_validate(subcategoria)
 
-@app.get("/api/subcategorias", response_model=list[SubcategoriaOut])
+@app.get("/api/subcategorias", response_model=list[SubcategoriaOut], tags=["Subcategoría"])
 def get_subcategorias():
     subcategorias = obtener_subcategorias()
     return subcategorias
+
+@app.delete("/api/subcategoria/{id}", status_code=status.HTTP_204_NO_CONTENT, tags=["Subcategoría"])
+def eliminar_subcategoria(id: UUID):
+    try:
+        db.eliminar_subcategoria(id)
+    except SubcategoriaDeletionError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 @app.get("/", response_class=HTMLResponse)
 def read_root():

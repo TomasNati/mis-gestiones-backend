@@ -20,6 +20,9 @@ database = Database()
 class CategoriaDeletionError(Exception):
     pass
 
+class SubcategoriaDeletionError(Exception):
+    pass
+
 class Base(DeclarativeBase):
     pass
 
@@ -126,6 +129,17 @@ def crear_subcategoria(subcategoria: models.SubcategoriaCrear) -> Subcategoria:
         session.commit()
         session.refresh(subcategoria)
         return subcategoria
+    
+def actualizar_subcategoria(subcategoria: models.SubcategoriaBasicOut) -> Subcategoria:
+    with Session(database.engine) as session:
+        subcategoriaDB = session.get(Subcategoria, subcategoria.id)
+        if subcategoriaDB:
+            subcategoriaDB.nombre = subcategoria.nombre
+            subcategoriaDB.comentarios = subcategoria.comentarios
+            subcategoriaDB.categoriaId = subcategoria.categoriaId
+            session.commit()
+            session.refresh(subcategoriaDB)
+        return subcategoriaDB
 
 def obtener_subcategoria_por_id(id: UUID) -> Subcategoria:
     with Session(database.engine) as session:
@@ -151,6 +165,16 @@ def obtener_subcategorias() -> Sequence[Subcategoria]:
         subcategorias_activas = result.scalars().all()
 
     return subcategorias_activas
+
+def eliminar_subcategoria(id: uuid.UUID):
+    with Session(database.engine) as session:
+        subcategoria = session.get(Subcategoria, id)
+
+        if subcategoria is None:
+            raise SubcategoriaDeletionError(f"Subcategoria with id {id} not found.")
+
+        session.delete(subcategoria)
+        session.commit()
     
 
 
