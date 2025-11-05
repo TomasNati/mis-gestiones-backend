@@ -55,7 +55,7 @@ class Subcategoria(Base):
         return f'Subcategoria(id={self.id}, nombre={self.nombre}, comentarios={self.comentarios})'
     
 
-def obtener_categorias() -> Sequence[Categoria]:
+def obtener_categorias(incluirInactivas: bool = False) -> Sequence[Categoria]:
     with Session(database.engine) as session:
         query = (
             select(Categoria)
@@ -154,17 +154,25 @@ def obtener_subcategoria_por_id(id: UUID) -> Subcategoria:
 
         return subcategoria
 
-def obtener_subcategorias() -> Sequence[Subcategoria]:
+def obtener_subcategorias(
+        id: Optional[UUID] = None,
+        nombre: Optional[str] = None,
+        active: Optional[bool] = None
+) -> Sequence[Subcategoria]:
     with Session(database.engine) as session:
         query = (
-            select(Subcategoria)
-            .options(selectinload(Subcategoria.categoria))
-            .where(Subcategoria.active == True)
+          select(Subcategoria)
+          .options(selectinload(Subcategoria.categoria))
         )
-        result = session.execute(query)
-        subcategorias_activas = result.scalars().all()
 
-    return subcategorias_activas
+        if id is not None: query = query.where(Subcategoria.id == id)
+        if nombre is not None: query = query.where(Subcategoria.nombre.ilike(f"%{nombre}%"))
+        if active is not None: query = query.where(Subcategoria.active == active)
+
+        result = session.execute(query)
+        subcategorias = result.scalars().all()
+
+    return subcategorias
 
 def eliminar_subcategoria(id: uuid.UUID):
     with Session(database.engine) as session:
@@ -173,8 +181,6 @@ def eliminar_subcategoria(id: uuid.UUID):
         if subcategoria is None:
             raise SubcategoriaDeletionError(f"Subcategoria with id {id} not found.")
 
-        session.delete(subcategoria)
+        subcategoria.active = False
         session.commit()
     
-
-

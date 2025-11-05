@@ -8,6 +8,7 @@ class CategoriasCrear(BaseModel):
 
 class CategoriaBasicOut(CategoriasCrear):
     id: uuid.UUID
+    active: bool
 
     class Config:
         from_attributes = True
@@ -23,6 +24,7 @@ class SubcategoriaCrear(CategoriasCrear):
 
 class SubcategoriaBasicOut(SubcategoriaCrear):
     id: uuid.UUID
+    active: bool
 
     class Config:
         from_attributes = True

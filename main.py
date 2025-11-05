@@ -91,8 +91,12 @@ def get_subcategoria(id: UUID):
     return models.SubcategoriaOut.model_validate(subcategoria)
 
 @app.get("/api/subcategorias", response_model=list[SubcategoriaOut], tags=["Subcategoría"])
-def get_subcategorias():
-    subcategorias = obtener_subcategorias()
+def get_subcategorias(
+    id: Optional[UUID] = Query(None), 
+    nombre: Optional[str] = Query(None),
+    active: Optional[bool] = Query(None)
+):
+    subcategorias = obtener_subcategorias(id=id, nombre=nombre, active=active)
     return subcategorias
 
 @app.delete("/api/subcategoria/{id}", status_code=status.HTTP_204_NO_CONTENT, tags=["Subcategoría"])
