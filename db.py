@@ -2,7 +2,7 @@ from dotenv import load_dotenv
 import os
 from sqlalchemy import create_engine, select, String, Text, Boolean, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, Session, relationship, selectinload
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, Session, relationship, selectinload, with_loader_criteria
 from typing import Optional, Sequence
 import uuid
 import models
@@ -55,17 +55,30 @@ class Subcategoria(Base):
         return f'Subcategoria(id={self.id}, nombre={self.nombre}, comentarios={self.comentarios})'
     
 
-def obtener_categorias(incluirInactivas: bool = False) -> Sequence[Categoria]:
+def obtener_categorias(
+        id: Optional[UUID] = None,
+        nombre: Optional[str] = None,
+        active: Optional[bool] = None
+) -> Sequence[Categoria]:
     with Session(database.engine) as session:
-        query = (
-            select(Categoria)
-            .options(selectinload(Categoria.subcategorias))
-            .where(Categoria.active == True)
-        )
-        result = session.execute(query)
-        categorias_activas = result.scalars().all()
+        query = select(Categoria)
 
-    return categorias_activas
+        if active is not None:
+            query = query.options(
+                selectinload(Categoria.subcategorias),
+                with_loader_criteria(Subcategoria, lambda s: s.active == active, include_aliases=True)
+            )
+        else:
+            query = query.options(selectinload(Categoria.subcategorias))
+
+        if id is not None: query = query.where(Categoria.id == id)
+        if nombre is not None: query = query.where(Categoria.nombre.ilike(f"%{nombre}%"))
+        if active is not None: query = query.where(Categoria.active == active)
+
+        result = session.execute(query)
+        categorias = result.scalars().all()
+
+    return categorias
 
 def obtener_categoria_por_id(id: UUID, incluir_subcategorias: bool = False):
     with Session(database.engine) as session:
@@ -115,8 +128,9 @@ def eliminar_categoria(id: uuid.UUID, eliminar_subcategorias: bool = False ):
         
         if has_children and eliminar_subcategorias:
             for sub in categoria.subcategorias:
-                session.delete(sub)
-        session.delete(categoria)
+                sub.active = False
+
+        categoria.active = False
         session.commit()
 
 def crear_subcategoria(subcategoria: models.SubcategoriaCrear) -> Subcategoria:

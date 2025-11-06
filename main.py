@@ -29,8 +29,12 @@ app.add_middleware( CORSMiddleware,
 
 
 @app.get("/api/categorias", response_model=list[CategoriaOut], tags=["Categoría"])
-def get_categorias():
-    categorias = obtener_categorias()
+def get_categorias(
+    id: Optional[UUID] = Query(None), 
+    nombre: Optional[str] = Query(None),
+    active: Optional[bool] = Query(None)
+):
+    categorias = obtener_categorias(id=id, nombre=nombre, active=active)
     return categorias
 
 @app.get("/api/categoria/{id}", response_model=Union[CategoriaOut, CategoriaBasicOut], tags=["Categoría"])
@@ -63,9 +67,9 @@ def crear_categoria(categoria: CategoriasCrear):
     return CategoriaBasicOut.model_validate(categoria)
 
 @app.delete("/api/categoria/{id}", status_code=status.HTTP_204_NO_CONTENT, tags=["Categoría"])
-def eliminar_categoria(id: UUID, eliminar: Optional[bool] = Query(None)):
+def eliminar_categoria(id: UUID, eliminar_subcategorias: Optional[bool] = Query(None)):
     try:
-        db.eliminar_categoria(id, eliminar_subcategorias=eliminar)
+        db.eliminar_categoria(id, eliminar_subcategorias=eliminar_subcategorias)
     except CategoriaDeletionError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except Exception as e:
