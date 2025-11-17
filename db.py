@@ -94,11 +94,12 @@ def obtener_categoria_por_id(id: UUID, incluir_subcategorias: bool = False):
 
     return categoria
 
-def actualizar_categoria(id: UUID, nombre: str) -> Categoria:
+def actualizar_categoria(id: UUID, categoria_update: models.CategoriaBasicOut) -> Categoria:
     with Session(database.engine) as session:
         categoria = session.get(Categoria, id)
         if categoria:
-            categoria.nombre = nombre
+            categoria.nombre = categoria_update.nombre
+            categoria.comentarios = categoria_update.comentarios
             session.commit()
             session.refresh(categoria)
         return categoria
@@ -144,7 +145,7 @@ def crear_subcategoria(subcategoria: models.SubcategoriaCrear) -> Subcategoria:
         session.refresh(subcategoria)
         return subcategoria
     
-def actualizar_subcategoria(subcategoria: models.SubcategoriaBasicOut) -> Subcategoria:
+def actualizar_subcategoria(subcategoria: models.SubcategoriaOut) -> Subcategoria:
     with Session(database.engine) as session:
         subcategoriaDB = session.get(Subcategoria, subcategoria.id)
         if subcategoriaDB:

@@ -57,7 +57,7 @@ def actualizar_categoria(id: str, categoria: CategoriaBasicOut):
             detail=f"ID mismatch: path ID is {id}, but body ID is {categoria.id}"
         )
     
-    categoria = db.actualizar_categoria(id, nombre=categoria.nombre)
+    categoria = db.actualizar_categoria(id, categoria_update=categoria)
     
     return CategoriaBasicOut.model_validate(categoria)
 
