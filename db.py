@@ -117,7 +117,10 @@ def eliminar_categoria(id: uuid.UUID, eliminar_subcategorias: bool = False ):
     with Session(database.engine) as session:
         categoria = session.execute(
             select(Categoria)
-            .options(selectinload(Categoria.subcategorias))
+            .options(
+                selectinload(Categoria.subcategorias),
+                with_loader_criteria(Subcategoria, Subcategoria.active == True)
+            )
             .where(Categoria.id == id)
         ).scalar_one_or_none()
 
