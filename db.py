@@ -100,6 +100,7 @@ def actualizar_categoria(id: UUID, categoria_update: models.CategoriaBasicOut) -
         if categoria:
             categoria.nombre = categoria_update.nombre
             categoria.comentarios = categoria_update.comentarios
+            categoria.active = categoria_update.active
             session.commit()
             session.refresh(categoria)
         return categoria
@@ -152,6 +153,7 @@ def actualizar_subcategoria(subcategoria: models.SubcategoriaOut) -> Subcategori
             subcategoriaDB.nombre = subcategoria.nombre
             subcategoriaDB.comentarios = subcategoria.comentarios
             subcategoriaDB.categoriaId = subcategoria.categoriaId
+            subcategoriaDB.active = subcategoria.active
             session.commit()
             session.refresh(subcategoriaDB)
         return subcategoriaDB
