@@ -1,3 +1,4 @@
+import datetime
 from pydantic import BaseModel
 from typing import Optional
 import uuid
@@ -34,3 +35,35 @@ class SubcategoriaOut(SubcategoriaBasicOut):
 
     class Config:
         from_attributes = True
+
+class DetalleSubcategoriaOut(BaseModel):
+    id: uuid.UUID
+    nombre: str
+    subcategoriaId: uuid.UUID
+    subcategoria: SubcategoriaBasicOut
+    comentarios: Optional[str] = None
+    active: bool
+
+    class Config:
+        from_attributes = True
+
+class MovimientoGastoOut(BaseModel):
+    id: uuid.UUID
+    subcategoriaId: uuid.UUID
+    subcategoria: SubcategoriaBasicOut
+    detalleSubcategoriaId: Optional[uuid.UUID] = None
+    detalleSubcategoria: Optional[DetalleSubcategoriaOut] = None
+    tipoDePago: str
+    monto: float
+    comentarios: Optional[str] = None
+    fecha: Optional[datetime.datetime] = None
+    active: bool
+
+    class Config:
+        from_attributes = True
+
+class MovimientoGastoSearchResults(BaseModel):
+    total: int
+    page_number: int
+    page_size: int
+    movimientos: list[MovimientoGastoOut]

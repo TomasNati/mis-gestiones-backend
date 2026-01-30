@@ -1,9 +1,18 @@
+from datetime import datetime
 from dotenv import load_dotenv
 import os
-from sqlalchemy import create_engine, select, String, Text, Boolean, ForeignKey
+from sqlalchemy import create_engine, func, select
 from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, Session, relationship, selectinload, with_loader_criteria
+from sqlalchemy.orm import Session, selectinload, with_loader_criteria
 from typing import Optional, Sequence
+from structure import (
+    Categoria,
+    Subcategoria,
+    CategoriaDeletionError,
+    SubcategoriaDeletionError,
+    MovimientoGasto,
+    DetalleSubcategoria
+)
 import uuid
 import models
 
@@ -16,44 +25,6 @@ class Database():
         self.engine = create_engine(DATABASE_URL)
 
 database = Database()
-
-class CategoriaDeletionError(Exception):
-    pass
-
-class SubcategoriaDeletionError(Exception):
-    pass
-
-class Base(DeclarativeBase):
-    pass
-
-class Categoria(Base):
-    __tablename__ = "finanzas_categoria"
-    __table_args__ = { 'schema': 'misgestiones'}
-
-    id: Mapped[str] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    nombre: Mapped[str] = mapped_column(String(255))
-    comentarios: Mapped[Optional[str]] = mapped_column(Text)
-    active: Mapped[bool] = mapped_column(Boolean, default=True)
-    subcategorias: Mapped[list['Subcategoria']] = relationship(back_populates='categoria')
-
-    def __repr__(self) -> str:
-        return f'Categoria(id={self.id}, nombre={self.nombre}, comentarios={self.comentarios})'
-
-class Subcategoria(Base):
-    __tablename__ = "finanzas_subcategoria"
-    __table_args__ = { 'schema': 'misgestiones'}
-
-    id: Mapped[str] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    nombre: Mapped[str] = mapped_column(String(255))
-    tipoDeGasto: Mapped[str] = mapped_column("tipodegasto", String(255))
-    comentarios: Mapped[Optional[str]] = mapped_column(Text)
-    categoriaId: Mapped[str] = mapped_column('categoria', ForeignKey("misgestiones.finanzas_categoria.id"))
-    categoria: Mapped[Categoria] = relationship(back_populates='subcategorias')
-    active: Mapped[bool] = mapped_column(Boolean, default=True)
-
-    def __repr__(self) -> str:
-        return f'Subcategoria(id={self.id}, nombre={self.nombre}, comentarios={self.comentarios})'
-    
 
 def obtener_categorias(
         id: Optional[UUID] = None,
@@ -80,6 +51,64 @@ def obtener_categorias(
 
     return categorias
 
+def obtener_movimientos_gasto(
+        id: Optional[UUID] = None,
+        categoriaId: Optional[UUID] = None,
+        subcategoriaId: Optional[UUID] = None,
+        detalleSubcategoriaId: Optional[UUID] = None,
+        tipoDePago: Optional[str] = None,
+        active: Optional[bool] = None,
+        monto_min: Optional[float] = None,
+        monto_max: Optional[float] = None,
+        comentarios: Optional[str] = None,
+        desde_fecha: Optional[datetime] = None,
+        hasta_fecha: Optional[datetime] = None,
+        page_size: Optional[int] = 50,
+        page_number: Optional[int] = 1
+) -> models.MovimientoGastoSearchResults:
+    with Session(database.engine) as session:
+        query = (
+            select(MovimientoGasto)
+            .options(
+                selectinload(MovimientoGasto.subcategoria).options(
+                    selectinload(Subcategoria.categoria)
+                ),
+                selectinload(MovimientoGasto.detalleSubcategoria).options(
+                    selectinload(DetalleSubcategoria.subcategoria)
+                )
+            )
+        )
+
+        if id is not None: query = query.where(MovimientoGasto.id == id)
+        if categoriaId is not None: query = query.where(MovimientoGasto.subcategoria.has(Subcategoria.categoriaId == categoriaId))
+        if subcategoriaId is not None: query = query.where(MovimientoGasto.subcategoriaId == subcategoriaId)
+        if detalleSubcategoriaId is not None: query = query.where(MovimientoGasto.detalleSubcategoriaId == detalleSubcategoriaId)
+        if tipoDePago is not None: query = query.where(MovimientoGasto.tipoDePago.ilike(f"%{tipoDePago}%"))
+        if active is not None: query = query.where(MovimientoGasto.active == active)
+        if monto_min is not None: query = query.where(MovimientoGasto.monto >= monto_min)
+        if monto_max is not None: query = query.where(MovimientoGasto.monto <= monto_max)
+        if comentarios is not None: query = query.where(MovimientoGasto.comentarios.ilike(f"%{comentarios}%"))
+        if desde_fecha is not None: query = query.where(MovimientoGasto.fecha >= desde_fecha)
+        if hasta_fecha is not None: query = query.where(MovimientoGasto.fecha <= hasta_fecha)
+
+        # Get total count before pagination
+        total = session.execute(
+            select(func.count()).select_from(query.subquery())
+        ).scalar_one()
+
+        if page_size is not None and page_number is not None:
+            query = query.limit(page_size).offset(page_size * (page_number - 1))
+
+        result = session.execute(query)
+        movimientos = result.scalars().all()
+
+    return models.MovimientoGastoSearchResults(
+        total=total,
+        page_number=page_number,
+        page_size=page_size,
+        movimientos=movimientos
+    )
+
 def obtener_categoria_por_id(id: UUID, incluir_subcategorias: bool = False):
     with Session(database.engine) as session:
         query = (
@@ -104,7 +133,7 @@ def actualizar_categoria(id: UUID, categoria_update: models.CategoriaBasicOut) -
             session.commit()
             session.refresh(categoria)
         return categoria
-    
+
 def crear_categoria(nombre: str) -> Categoria:
     with Session(database.engine) as session:
         categoria = Categoria(nombre=nombre)
@@ -112,7 +141,7 @@ def crear_categoria(nombre: str) -> Categoria:
         session.commit()
         session.refresh(categoria)
         return categoria
-    
+
 def eliminar_categoria(id: uuid.UUID, eliminar_subcategorias: bool = False ):
     with Session(database.engine) as session:
         categoria = session.execute(
@@ -148,7 +177,7 @@ def crear_subcategoria(subcategoria: models.SubcategoriaCrear) -> Subcategoria:
         session.commit()
         session.refresh(subcategoria)
         return subcategoria
-    
+
 def actualizar_subcategoria(subcategoria: models.SubcategoriaOut) -> Subcategoria:
     with Session(database.engine) as session:
         subcategoriaDB = session.get(Subcategoria, subcategoria.id)
@@ -203,4 +232,3 @@ def eliminar_subcategoria(id: uuid.UUID):
 
         subcategoria.active = False
         session.commit()
-    

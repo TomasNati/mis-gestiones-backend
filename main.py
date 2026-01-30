@@ -3,7 +3,12 @@ from uuid import UUID
 from fastapi import FastAPI, HTTPException, Query, status
 from fastapi.responses import HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
-from db import CategoriaDeletionError, SubcategoriaDeletionError, obtener_categoria_por_id, obtener_categorias, obtener_subcategorias
+from db import (
+    obtener_categoria_por_id,
+    obtener_categorias,
+    obtener_subcategorias,
+)
+from structure import CategoriaDeletionError, SubcategoriaDeletionError
 import db
 from models import CategoriaOut, CategoriasCrear, SubcategoriaOut, CategoriaBasicOut
 import models
@@ -27,6 +32,38 @@ app.add_middleware( CORSMiddleware,
     allow_headers=["*"],
 )
 
+@app.get("/api/movimientos-gasto", response_model=models.MovimientoGastoSearchResults, tags=["Movimiento Gasto"])
+def get_movimientos_gasto(
+    id: Optional[UUID] = Query(None), 
+    categoriaId: Optional[UUID] = Query(None),
+    subcategoriaId: Optional[UUID] = Query(None),
+    detalleSubcategoriaId: Optional[UUID] = Query(None),
+    tipoDePago: Optional[str] = Query(None),
+    active: Optional[bool] = Query(True),
+    monto_min: Optional[float] = Query(None),
+    monto_max: Optional[float] = Query(None),
+    comentarios: Optional[str] = Query(None),
+    desde_fecha: Optional[str] = Query(None),
+    hasta_fecha: Optional[str] = Query(None),
+    page_size: Optional[int] = Query(50),
+    page_number: Optional[int] = Query(1)
+):
+    movimientos = db.obtener_movimientos_gasto(
+        id=id,
+        categoriaId=categoriaId,
+        subcategoriaId=subcategoriaId,
+        detalleSubcategoriaId=detalleSubcategoriaId,
+        tipoDePago=tipoDePago,
+        active=active,
+        monto_min=monto_min,
+        monto_max=monto_max,
+        comentarios=comentarios,
+        desde_fecha=desde_fecha,
+        hasta_fecha=hasta_fecha,
+        page_size=page_size,
+        page_number=page_number
+    )
+    return movimientos
 
 @app.get("/api/categorias", response_model=list[CategoriaOut], tags=["Categoría"])
 def get_categorias(
