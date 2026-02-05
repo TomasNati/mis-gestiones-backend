@@ -32,36 +32,23 @@ app.add_middleware( CORSMiddleware,
     allow_headers=["*"],
 )
 
-@app.post("/api/movimientos-gasto", response_model=models.MovimientoGastoSearchResults, tags=["Movimiento Gasto"])
-def buscar_movimientos_gasto(
-    id: Optional[UUID] = Query(None), 
-    categoriaId: Optional[UUID] = Query(None),
-    subcategoriaId: Optional[UUID] = Query(None),
-    detalleSubcategoriaId: Optional[UUID] = Query(None),
-    tipoDePago: Optional[str] = Query(None),
-    active: Optional[bool] = Query(True),
-    monto_min: Optional[float] = Query(None),
-    monto_max: Optional[float] = Query(None),
-    comentarios: Optional[str] = Query(None),
-    desde_fecha: Optional[str] = Query(None),
-    hasta_fecha: Optional[str] = Query(None),
-    page_size: Optional[int] = Query(50),
-    page_number: Optional[int] = Query(1)
-):
+
+@app.post("/api/movimientos-gasto",  response_model=models.MovimientoGastoSearchResults, tags=["Movimiento Gasto"])
+def buscar_movimientos_gasto(params: models.MovimientoGastoQueryParams):
     movimientos = db.obtener_movimientos_gasto(
-        id=id,
-        categoriaId=categoriaId,
-        subcategoriaId=subcategoriaId,
-        detalleSubcategoriaId=detalleSubcategoriaId,
-        tipoDePago=tipoDePago,
-        active=active,
-        monto_min=monto_min,
-        monto_max=monto_max,
-        comentarios=comentarios,
-        desde_fecha=desde_fecha,
-        hasta_fecha=hasta_fecha,
-        page_size=page_size,
-        page_number=page_number
+        id=params.id,
+        categoriaId=params.categoriaId,
+        subcategoriaId=params.subcategoriaId,
+        detalleSubcategoriaId=params.detalleSubcategoriaId,
+        tipoDePago=params.tipoDePago,
+        active=params.active,
+        monto_min=params.monto_min,
+        monto_max=params.monto_max,
+        comentarios=params.comentarios,
+        desde_fecha=params.desde_fecha,
+        hasta_fecha=params.hasta_fecha,
+        page_size=params.page_size,
+        page_number=params.page_number,
     )
     return movimientos
 
