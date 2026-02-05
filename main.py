@@ -32,8 +32,8 @@ app.add_middleware( CORSMiddleware,
     allow_headers=["*"],
 )
 
-@app.get("/api/movimientos-gasto", response_model=models.MovimientoGastoSearchResults, tags=["Movimiento Gasto"])
-def get_movimientos_gasto(
+@app.post("/api/movimientos-gasto", response_model=models.MovimientoGastoSearchResults, tags=["Movimiento Gasto"])
+def buscar_movimientos_gasto(
     id: Optional[UUID] = Query(None), 
     categoriaId: Optional[UUID] = Query(None),
     subcategoriaId: Optional[UUID] = Query(None),
