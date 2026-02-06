@@ -21,8 +21,10 @@ app = FastAPI(
 )
 
 origins = [
-    "http://localhost:5173",
-    "https://mis-gestiones-admin.vercel.app"
+    "http://localhost:5173", # Default Vite dev server port
+    "http://localhost:9999", # Custom port for testing
+    "https://mis-gestiones-admin.vercel.app",
+    "https://mis-gestiones-opal-kappa.vercel.app"
 ]
 
 app.add_middleware( CORSMiddleware,
