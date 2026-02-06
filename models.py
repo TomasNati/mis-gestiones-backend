@@ -54,11 +54,10 @@ class SubcategoriaOut(SubcategoriaBasicOut):
     class Config:
         from_attributes = True
 
-class DetalleSubcategoriaOut(BaseModel):
+class DetalleSubcategoriaBasicOut(BaseModel):
     id: uuid.UUID
     nombre: str
     subcategoriaId: uuid.UUID
-    subcategoria: SubcategoriaBasicOut
     comentarios: Optional[str] = None
     active: bool
 
@@ -67,10 +66,8 @@ class DetalleSubcategoriaOut(BaseModel):
 
 class MovimientoGastoOut(BaseModel):
     id: uuid.UUID
-    subcategoriaId: uuid.UUID
-    subcategoria: SubcategoriaBasicOut
-    detalleSubcategoriaId: Optional[uuid.UUID] = None
-    detalleSubcategoria: Optional[DetalleSubcategoriaOut] = None
+    subcategoria: SubcategoriaOut
+    detalleSubcategoria: Optional[DetalleSubcategoriaBasicOut] = None
     tipoDePago: str
     monto: float
     comentarios: Optional[str] = None
