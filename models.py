@@ -1,14 +1,14 @@
 import datetime
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, Sequence
 import uuid
 
 class MovimientoGastoQueryParams(BaseModel):
     id: Optional[uuid.UUID] = None
-    categoriaId: Optional[uuid.UUID] = None
-    subcategoriaId: Optional[uuid.UUID] = None
-    detalleSubcategoriaId: Optional[uuid.UUID] = None
-    tipoDePago: Optional[str] = None
+    categoriaIds: Optional[Sequence[uuid.UUID]] = None
+    subcategoriaIds: Optional[Sequence[uuid.UUID]] = None
+    detalleSubcategoriaIds: Optional[Sequence[uuid.UUID]] = None
+    tiposDePago: Optional[Sequence[str]] = None
     monto_min: Optional[float] = None
     monto_max: Optional[float] = None
     comentarios: Optional[str] = None

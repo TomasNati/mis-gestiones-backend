@@ -53,10 +53,10 @@ def obtener_categorias(
 
 def obtener_movimientos_gasto(
         id: Optional[UUID] = None,
-        categoriaId: Optional[UUID] = None,
-        subcategoriaId: Optional[UUID] = None,
-        detalleSubcategoriaId: Optional[UUID] = None,
-        tipoDePago: Optional[str] = None,
+        categoriaIds: Optional[Sequence[UUID]] = None,
+        subcategoriaIds: Optional[Sequence[UUID]] = None,
+        detalleSubcategoriaIds: Optional[Sequence[UUID]] = None,
+        tiposDePago: Optional[Sequence[str]] = None,
         active: Optional[bool] = None,
         monto_min: Optional[float] = None,
         monto_max: Optional[float] = None,
@@ -80,10 +80,10 @@ def obtener_movimientos_gasto(
         )
 
         if id is not None: query = query.where(MovimientoGasto.id == id)
-        if categoriaId is not None: query = query.where(MovimientoGasto.subcategoria.has(Subcategoria.categoriaId == categoriaId))
-        if subcategoriaId is not None: query = query.where(MovimientoGasto.subcategoriaId == subcategoriaId)
-        if detalleSubcategoriaId is not None: query = query.where(MovimientoGasto.detalleSubcategoriaId == detalleSubcategoriaId)
-        if tipoDePago is not None: query = query.where(MovimientoGasto.tipoDePago.ilike(f"%{tipoDePago}%"))
+        if categoriaIds is not None: query = query.where(MovimientoGasto.subcategoria.has(Subcategoria.categoriaId.in_(categoriaIds)))
+        if subcategoriaIds is not None: query = query.where(MovimientoGasto.subcategoriaId.in_(subcategoriaIds))
+        if detalleSubcategoriaIds is not None: query = query.where(MovimientoGasto.detalleSubcategoriaId.in_(detalleSubcategoriaIds))
+        if tiposDePago is not None: query = query.where(MovimientoGasto.tipoDePago.in_(tiposDePago))
         if active is not None: query = query.where(MovimientoGasto.active == active)
         if monto_min is not None: query = query.where(MovimientoGasto.monto >= monto_min)
         if monto_max is not None: query = query.where(MovimientoGasto.monto <= monto_max)
