@@ -1,7 +1,7 @@
 from datetime import datetime
 from dotenv import load_dotenv
 import os
-from sqlalchemy import create_engine, func, select
+from sqlalchemy import create_engine, func, select, asc, desc
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Session, selectinload, with_loader_criteria
 from typing import Optional, Sequence
@@ -64,7 +64,9 @@ def obtener_movimientos_gasto(
         desde_fecha: Optional[datetime] = None,
         hasta_fecha: Optional[datetime] = None,
         page_size: Optional[int] = 50,
-        page_number: Optional[int] = 1
+        page_number: Optional[int] = 1,
+        sort_by: Optional[str] = "fecha",
+        sort_direction: Optional[str] = "desc"
 ) -> models.MovimientoGastoSearchResults:
     with Session(database.engine) as session:
         query = (
@@ -90,6 +92,25 @@ def obtener_movimientos_gasto(
         if comentarios is not None: query = query.where(MovimientoGasto.comentarios.ilike(f"%{comentarios}%"))
         if desde_fecha is not None: query = query.where(MovimientoGasto.fecha >= desde_fecha)
         if hasta_fecha is not None: query = query.where(MovimientoGasto.fecha <= hasta_fecha)
+
+        # Apply sorting with support for nested properties (e.g., "subcategoria.nombre")
+        try:
+            if "." in sort_by:
+                parts = sort_by.split(".")
+                # Join the relationship table if sorting by nested property
+                related_obj = getattr(MovimientoGasto, parts[0])
+                query = query.join(related_obj)
+                # Navigate to the final property
+                sort_column = getattr(related_obj.property.mapper.class_, parts[1])
+            else:
+                sort_column = getattr(MovimientoGasto, sort_by, MovimientoGasto.fecha)
+        except (AttributeError, TypeError):
+            sort_column = MovimientoGasto.fecha
+        
+        if sort_direction and sort_direction.lower() == "asc":
+            query = query.order_by(asc(sort_column))
+        else:
+            query = query.order_by(desc(sort_column))
 
         # Get total count before pagination
         total = session.execute(

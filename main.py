@@ -51,6 +51,8 @@ def buscar_movimientos_gasto(params: models.MovimientoGastoQueryParams):
         hasta_fecha=params.hasta_fecha,
         page_size=params.page_size,
         page_number=params.page_number,
+        sort_by=params.sort_by,
+        sort_direction=params.sort_direction,
     )
     return movimientos
 

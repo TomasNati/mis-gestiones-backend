@@ -17,6 +17,8 @@ class MovimientoGastoQueryParams(BaseModel):
     active: Optional[bool] = True
     page_size: Optional[int] = 50
     page_number: Optional[int] = 1
+    sort_by: Optional[str] = "fecha"
+    sort_direction: Optional[str] = "desc"
 
     class Config:
         from_attributes = True
