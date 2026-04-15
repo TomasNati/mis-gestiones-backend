@@ -56,6 +56,33 @@ def buscar_movimientos_gasto(params: models.MovimientoGastoQueryParams):
     )
     return movimientos
 
+@app.post("/api/vencimientos", response_model=models.VencimientoSearchResults, tags=["Vencimientos"])
+def buscar_vencimientos(params: models.VencimientoQueryParams):
+    if not params.model_fields_set:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="At least one query parameter must be provided"
+        )
+    vencimientos = db.obtener_vencimientos(
+        id=params.id,
+        categoriaIds=params.categoriaIds,
+        subcategoriaIds=params.subcategoriaIds,
+        esAnual=params.esAnual,
+        fechaConfirmada=params.fechaConfirmada,
+        pagado=params.pagado,
+        active=params.active,
+        monto_min=params.monto_min,
+        monto_max=params.monto_max,
+        comentarios=params.comentarios,
+        desde_fecha=params.desde_fecha,
+        hasta_fecha=params.hasta_fecha,
+        page_size=params.page_size,
+        page_number=params.page_number,
+        sort_by=params.sort_by,
+        sort_direction=params.sort_direction,
+    )
+    return vencimientos
+
 @app.get("/api/categorias", response_model=list[CategoriaOut], tags=["Categoría"])
 def get_categorias(
     id: Optional[UUID] = Query(None), 

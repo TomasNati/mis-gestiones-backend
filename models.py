@@ -87,3 +87,47 @@ class MovimientoGastoSearchResults(BaseModel):
 
     class Config:
       from_attributes = True
+
+class VencimientoQueryParams(BaseModel):
+    id: Optional[uuid.UUID] = None
+    categoriaIds: Optional[Sequence[uuid.UUID]] = None
+    subcategoriaIds: Optional[Sequence[uuid.UUID]] = None
+    esAnual: Optional[bool] = None
+    fechaConfirmada: Optional[bool] = None
+    pagado: Optional[bool] = None
+    monto_min: Optional[float] = None
+    monto_max: Optional[float] = None
+    comentarios: Optional[str] = None
+    desde_fecha: Optional[datetime.datetime] = None
+    hasta_fecha: Optional[datetime.datetime] = None
+    active: Optional[bool] = True
+    page_size: Optional[int] = 50
+    page_number: Optional[int] = 1
+    sort_by: Optional[str] = "fecha"
+    sort_direction: Optional[str] = "asc"
+
+    class Config:
+        from_attributes = True
+
+class VencimientoOut(BaseModel):
+    id: uuid.UUID
+    subcategoria: SubcategoriaOut
+    fecha: datetime.datetime
+    monto: float
+    esAnual: bool
+    comentarios: Optional[str] = None
+    active: bool
+    fechaConfirmada: Optional[bool] = None
+    pagoId: Optional[uuid.UUID] = None
+
+    class Config:
+        from_attributes = True
+
+class VencimientoSearchResults(BaseModel):
+    total: int
+    page_number: int
+    page_size: int
+    vencimientos: list[VencimientoOut]
+
+    class Config:
+        from_attributes = True

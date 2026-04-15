@@ -68,3 +68,19 @@ class MovimientoGasto(Base):
     comentarios: Mapped[Optional[str]] = mapped_column(Text)
     fecha: Mapped[Optional[datetime]] = mapped_column(DateTime)
     active: Mapped[bool] = mapped_column(Boolean, default=True)
+
+class Vencimiento(Base):
+    __tablename__ = "finanzas_vencimiento"
+    __table_args__ = { 'schema': 'misgestiones'}
+
+    id: Mapped[str] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    subcategoriaId: Mapped[str] = mapped_column('subcategoria', ForeignKey("misgestiones.finanzas_subcategoria.id"))
+    subcategoria: Mapped[Subcategoria] = relationship()
+    fecha: Mapped[datetime] = mapped_column(DateTime)
+    monto: Mapped[float] = mapped_column()
+    esAnual: Mapped[bool] = mapped_column("esanual", Boolean, default=False)
+    comentarios: Mapped[Optional[str]] = mapped_column(Text)
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
+    fechaConfirmada: Mapped[Optional[bool]] = mapped_column("fechaconfirmada", Boolean, default=False, nullable=True)
+    pagoId: Mapped[Optional[str]] = mapped_column('pago', ForeignKey("misgestiones.finanzas_movimientogasto.id"), nullable=True)
+    pago: Mapped[Optional[MovimientoGasto]] = relationship()

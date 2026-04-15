@@ -11,7 +11,8 @@ from structure import (
     CategoriaDeletionError,
     SubcategoriaDeletionError,
     MovimientoGasto,
-    DetalleSubcategoria
+    DetalleSubcategoria,
+    Vencimiento
 )
 import uuid
 import models
@@ -128,6 +129,86 @@ def obtener_movimientos_gasto(
         page_number=page_number,
         page_size=page_size,
         movimientos=movimientos
+    )
+
+def obtener_vencimientos(
+        id: Optional[UUID] = None,
+        categoriaIds: Optional[Sequence[UUID]] = None,
+        subcategoriaIds: Optional[Sequence[UUID]] = None,
+        esAnual: Optional[bool] = None,
+        fechaConfirmada: Optional[bool] = None,
+        pagado: Optional[bool] = None,
+        active: Optional[bool] = None,
+        monto_min: Optional[float] = None,
+        monto_max: Optional[float] = None,
+        comentarios: Optional[str] = None,
+        desde_fecha: Optional[datetime] = None,
+        hasta_fecha: Optional[datetime] = None,
+        page_size: Optional[int] = 50,
+        page_number: Optional[int] = 1,
+        sort_by: Optional[str] = "fecha",
+        sort_direction: Optional[str] = "asc"
+) -> models.VencimientoSearchResults:
+    with Session(database.engine) as session:
+        query = (
+            select(Vencimiento)
+            .options(
+                selectinload(Vencimiento.subcategoria).options(
+                    selectinload(Subcategoria.categoria)
+                )
+            )
+        )
+
+        if id is not None: query = query.where(Vencimiento.id == id)
+        if categoriaIds is not None and (len(categoriaIds) > 0): query = query.where(Vencimiento.subcategoria.has(Subcategoria.categoriaId.in_(categoriaIds)))
+        if subcategoriaIds is not None and (len(subcategoriaIds) > 0): query = query.where(Vencimiento.subcategoriaId.in_(subcategoriaIds))
+        if esAnual is not None: query = query.where(Vencimiento.esAnual == esAnual)
+        if fechaConfirmada is not None: query = query.where(Vencimiento.fechaConfirmada == fechaConfirmada)
+        if pagado is not None:
+            if pagado:
+                query = query.where(Vencimiento.pagoId.is_not(None))
+            else:
+                query = query.where(Vencimiento.pagoId.is_(None))
+        if active is not None: query = query.where(Vencimiento.active == active)
+        if monto_min is not None: query = query.where(Vencimiento.monto >= monto_min)
+        if monto_max is not None: query = query.where(Vencimiento.monto <= monto_max)
+        if comentarios is not None: query = query.where(Vencimiento.comentarios.ilike(f"%{comentarios}%"))
+        if desde_fecha is not None: query = query.where(Vencimiento.fecha >= desde_fecha)
+        if hasta_fecha is not None: query = query.where(Vencimiento.fecha <= hasta_fecha)
+
+        # Apply sorting with support for nested properties (e.g., "subcategoria.nombre")
+        try:
+            if "." in sort_by:
+                parts = sort_by.split(".")
+                related_obj = getattr(Vencimiento, parts[0])
+                query = query.join(related_obj)
+                sort_column = getattr(related_obj.property.mapper.class_, parts[1])
+            else:
+                sort_column = getattr(Vencimiento, sort_by, Vencimiento.fecha)
+        except (AttributeError, TypeError):
+            sort_column = Vencimiento.fecha
+
+        if sort_direction and sort_direction.lower() == "desc":
+            query = query.order_by(desc(sort_column))
+        else:
+            query = query.order_by(asc(sort_column))
+
+        # Get total count before pagination
+        total = session.execute(
+            select(func.count()).select_from(query.subquery())
+        ).scalar_one()
+
+        if page_size is not None and page_number is not None:
+            query = query.limit(page_size).offset(page_size * (page_number - 1))
+
+        result = session.execute(query)
+        vencimientos = result.scalars().all()
+
+    return models.VencimientoSearchResults(
+        total=total,
+        page_number=page_number,
+        page_size=page_size,
+        vencimientos=vencimientos
     )
 
 def obtener_categoria_por_id(id: UUID, incluir_subcategorias: bool = False):
