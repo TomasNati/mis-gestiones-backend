@@ -66,6 +66,19 @@ class DetalleSubcategoriaBasicOut(BaseModel):
     class Config:
         from_attributes = True
 
+class MovimientoGastoBasicOut(BaseModel):
+    id: uuid.UUID
+    subcategoriaId: uuid.UUID
+    detalleSubcategoriaId: Optional[uuid.UUID] = None
+    tipoDePago: str
+    monto: float
+    comentarios: Optional[str] = None
+    fecha: Optional[datetime.datetime] = None
+    active: bool
+
+    class Config:
+        from_attributes = True
+
 class MovimientoGastoOut(BaseModel):
     id: uuid.UUID
     subcategoria: SubcategoriaOut
@@ -119,6 +132,7 @@ class VencimientoOut(BaseModel):
     active: bool
     fechaConfirmada: Optional[bool] = None
     pagoId: Optional[uuid.UUID] = None
+    pago: Optional[MovimientoGastoBasicOut] = None
 
     class Config:
         from_attributes = True

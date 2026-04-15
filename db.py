@@ -155,7 +155,8 @@ def obtener_vencimientos(
             .options(
                 selectinload(Vencimiento.subcategoria).options(
                     selectinload(Subcategoria.categoria)
-                )
+                ),
+                selectinload(Vencimiento.pago)
             )
         )
 
