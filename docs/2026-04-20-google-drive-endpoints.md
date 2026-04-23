@@ -135,36 +135,215 @@ Before implementation, an agent should read:
 
 ## One-time GCP setup (server-side)
 
-These are the steps required once to enable the backend to operate on the Drive folder:
+This comprehensive guide walks through setting up Google Cloud Platform and Google Drive to enable the backend to securely access a Drive folder via a service account.
 
-1. Enable the Google Drive API for your GCP project (APIs & Services → Enable APIs and Services → Google Drive API).
-2. Create a Service Account (IAM & Admin → Service Accounts). Give it a descriptive name (e.g. `mis-gestiones-drive-proxy`).
-3. Create and download a JSON key for the service account. From the JSON, note the `client_email` and the `private_key` values.
-4. In Google Drive, open the target folder, choose "Share", and add the service account's `client_email`. Grant Editor access if the backend must upload files; Viewer is sufficient for read-only.
-5. Obtain the folder ID from the Drive folder URL — the value after `/folders/` in the browser address bar — and set it as `GOOGLE_DRIVE_FOLDER_ID`.
-6. Configure deployment environment variables (Vercel / host):
-   - `GOOGLE_SA_CLIENT_EMAIL` — the service account `client_email`.
-   - `GOOGLE_SA_PRIVATE_KEY` — the `private_key` string from the JSON. If your platform strips newlines, replace real newlines with literal `\n`; the backend code calls `.replace("\\n","\n")` so either form works.
-   - `GOOGLE_DRIVE_FOLDER_ID` — the folder ID from step 5.
-   - `BACKEND_SHARED_SECRET` — a strong random secret used to validate `X-API-Key`.
-   - `MAX_UPLOAD_BYTES` — optional override of the default 4,000,000 bytes.
+### Prerequisites
 
-PowerShell local testing example (do not store real secrets in repo):
+- A Google account with access to Google Cloud Console (console.cloud.google.com)
+- A Google Drive folder where you want to store receipts/comprobantes
+- Access to create and configure GCP projects (or permissions in an existing project)
 
-$env:GOOGLE_SA_CLIENT_EMAIL = "service-account@PROJECT.iam.gserviceaccount.com"
-$env:GOOGLE_SA_PRIVATE_KEY = "-----BEGIN PRIVATE KEY-----`nMII...`n-----END PRIVATE KEY-----`n"
-$env:GOOGLE_DRIVE_FOLDER_ID = "0Bxx..."
-$env:BACKEND_SHARED_SECRET = "replace-with-a-secure-random-string"
+### Step 1: Create or select a GCP Project
 
-Generate a secure shared secret:
+1. Go to [Google Cloud Console](https://console.cloud.google.com/)
+2. Click the project dropdown at the top of the page
+3. Either:
+   - **Create new project:** Click "New Project", give it a name (e.g., `mis-gestiones-backend`), and click "Create"
+   - **Use existing project:** Select your existing project from the list
+4. Wait for the project to be created (may take a few seconds)
+5. Ensure the correct project is selected in the dropdown
 
+### Step 2: Enable the Google Drive API
+
+1. In the Google Cloud Console, go to **APIs & Services → Library** (or use the search bar and type "API Library")
+2. In the search box, type `Google Drive API`
+3. Click on **Google Drive API** from the results
+4. Click the **Enable** button
+5. Wait for the API to be enabled (you'll see a dashboard page once complete)
+
+### Step 3: Create a Service Account
+
+A service account is a special type of Google account that represents your application rather than an individual user.
+
+1. In the Google Cloud Console, navigate to **IAM & Admin → Service Accounts**
+   - URL: `https://console.cloud.google.com/iam-admin/serviceaccounts`
+2. Click **+ Create Service Account** at the top
+3. Fill in the service account details:
+   - **Service account name:** `mis-gestiones-drive-proxy` (or your preferred name)
+   - **Service account ID:** Will auto-populate (e.g., `mis-gestiones-drive-proxy`)
+   - **Description:** (optional) "Service account for mis-gestiones backend to access Drive folder with receipts"
+4. Click **Create and Continue**
+5. **Grant this service account access to project (optional):**
+   - You can skip this step (click "Continue") - we'll grant access directly to the Drive folder instead
+6. **Grant users access to this service account (optional):**
+   - Skip this step (click "Done")
+7. You should now see your service account in the list
+
+### Step 4: Create and Download Service Account Key
+
+1. In the Service Accounts list, click on the service account you just created
+2. Go to the **Keys** tab
+3. Click **Add Key → Create new key**
+4. Select **JSON** as the key type
+5. Click **Create**
+6. A JSON file will automatically download to your computer (e.g., `mis-gestiones-backend-abc123def456.json`)
+7. **IMPORTANT:** Store this file securely - it contains credentials that grant access to your Drive folder. Never commit it to source control.
+
+### Step 5: Extract Values from the JSON Key
+
+Open the downloaded JSON file. It will look like this:
+
+```json
+{
+  "type": "service_account",
+  "project_id": "your-project-id",
+  "private_key_id": "abc123...",
+  "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBg...\n-----END PRIVATE KEY-----\n",
+  "client_email": "mis-gestiones-drive-proxy@your-project.iam.gserviceaccount.com",
+  "client_id": "123456789...",
+  "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+  "token_uri": "https://oauth2.googleapis.com/token",
+  ...
+}
+```
+
+You need two values:
+- **`client_email`** - Copy this entire email address
+- **`private_key`** - Copy this entire string (including the BEGIN/END markers and `\n` characters)
+
+### Step 6: Prepare Your Google Drive Folder
+
+1. Open [Google Drive](https://drive.google.com/)
+2. Navigate to (or create) the folder where you want to store receipts
+3. **Get the Folder ID:**
+   - Open the folder
+   - Look at the URL in your browser's address bar
+   - The URL will look like: `https://drive.google.com/drive/folders/1AbCdEfGhIjKlMnOpQrStUvWxYz`
+   - Copy the ID after `/folders/` (e.g., `1AbCdEfGhIjKlMnOpQrStUvWxYz`)
+   - This is your `GOOGLE_DRIVE_FOLDER_ID`
+
+### Step 7: Share the Folder with the Service Account
+
+1. In Google Drive, right-click on your target folder
+2. Click **Share**
+3. In the "Add people and groups" field, paste the **`client_email`** from Step 5
+   - It will look like: `mis-gestiones-drive-proxy@your-project.iam.gserviceaccount.com`
+4. Set the permission level:
+   - **Editor** - Required if you want to upload files (recommended for this project)
+   - **Viewer** - Only if you need read-only access
+5. **Uncheck** "Notify people" (the service account doesn't need email notifications)
+6. Click **Share** or **Send**
+7. The service account now has access to this folder
+
+### Step 8: Generate a Shared Secret for API Authentication
+
+The backend requires an API key that clients must send in the `X-API-Key` header to access Drive endpoints.
+
+Run this command to generate a secure random secret:
+
+```bash
 python -c "import secrets; print(secrets.token_urlsafe(32))"
+```
 
-Security notes:
+Or in PowerShell:
 
-- Never commit service account keys or .env files to source control. Use platform secret storage (Vercel environment variables, Azure Key Vault, etc.).
-- Limit the service account's permissions to Drive access only; prefer sharing the single folder instead of broad project roles when possible.
-- Rotate keys immediately if you suspect exposure.
+```powershell
+python -c "import secrets; print(secrets.token_urlsafe(32))"
+```
+
+Save the output - this is your `BACKEND_SHARED_SECRET`.
+
+### Step 9: Configure Environment Variables
+
+#### For Local Development (.env file):
+
+Create a `.env` file in your project root (or copy `.env.example` and fill it in):
+
+```bash
+# Database
+DATABASE_URL=postgresql://user:password@localhost:5432/misgestiones
+
+# Google Drive API
+GOOGLE_SA_CLIENT_EMAIL=mis-gestiones-drive-proxy@your-project.iam.gserviceaccount.com
+GOOGLE_SA_PRIVATE_KEY=-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQC...\n-----END PRIVATE KEY-----\n
+GOOGLE_DRIVE_FOLDER_ID=1AbCdEfGhIjKlMnOpQrStUvWxYz
+
+# API Security
+BACKEND_SHARED_SECRET=your-generated-secret-from-step-8
+
+# Optional: Override default max upload size (default: 4000000 bytes = ~3.8 MB)
+MAX_UPLOAD_BYTES=4000000
+```
+
+**Important:** Keep the literal `\n` characters in the `GOOGLE_SA_PRIVATE_KEY` value - the backend code will convert them to real newlines automatically.
+
+#### For Vercel Deployment:
+
+1. Go to your Vercel project dashboard
+2. Navigate to **Settings → Environment Variables**
+3. Add each variable:
+   - `GOOGLE_SA_CLIENT_EMAIL` → Paste the service account email
+   - `GOOGLE_SA_PRIVATE_KEY` → Paste the entire private key (with `\n` characters)
+   - `GOOGLE_DRIVE_FOLDER_ID` → Paste the folder ID
+   - `BACKEND_SHARED_SECRET` → Paste the generated secret
+   - `MAX_UPLOAD_BYTES` → (optional) Enter custom value or leave unset for default
+4. Select which environments need these variables (Production, Preview, Development)
+5. Save and redeploy your application
+
+#### For Other Platforms:
+
+- **Heroku:** Use `heroku config:set VARIABLE_NAME="value"`
+- **Azure:** Configure in App Settings → Application settings
+- **AWS Lambda:** Set environment variables in the Lambda function configuration
+
+### Step 10: Verify the Setup
+
+1. Start your local development server:
+   ```bash
+   uvicorn main:app --reload --port 5001
+   ```
+
+2. Test the connection (replace `your-secret` with your actual `BACKEND_SHARED_SECRET`):
+   ```bash
+   curl -H "X-API-Key: your-secret" http://localhost:5001/api/drive/files
+   ```
+
+3. If successful, you should see a JSON response with `{"files": [...]}`
+
+4. If you get errors:
+   - **401 Unauthorized:** Check your `BACKEND_SHARED_SECRET` matches
+   - **403 Forbidden:** Verify the service account has access to the folder
+   - **404 Not Found:** Check your `GOOGLE_DRIVE_FOLDER_ID` is correct
+   - **500 Internal Server Error:** Check your `GOOGLE_SA_CLIENT_EMAIL` and `GOOGLE_SA_PRIVATE_KEY` are correct
+
+### Security Best Practices
+
+- ✅ **Never commit** the service account JSON key or `.env` file to source control
+- ✅ Add `.env` and `*service-account*.json` to your `.gitignore` file
+- ✅ Use platform-specific secret storage (Vercel Environment Variables, Azure Key Vault, AWS Secrets Manager)
+- ✅ Limit the service account's permissions to only what's needed (folder-level Editor access)
+- ✅ **Do not** grant the service account project-level roles like Owner or Editor
+- ✅ Rotate keys immediately if you suspect exposure
+- ✅ Use different service accounts for different environments (dev/staging/production) if needed
+- ✅ Store the `BACKEND_SHARED_SECRET` securely and never expose it in client-side code
+- ✅ Monitor service account usage in GCP Console → IAM & Admin → Service Accounts → View activity
+
+### Troubleshooting Common Issues
+
+**Issue:** "The caller does not have permission"
+- **Solution:** Ensure the service account email is shared with the folder with Editor permissions
+
+**Issue:** "Invalid authentication credentials"
+- **Solution:** Verify the `GOOGLE_SA_PRIVATE_KEY` is correct and includes BEGIN/END markers
+
+**Issue:** "File not found" when listing files
+- **Solution:** Double-check the `GOOGLE_DRIVE_FOLDER_ID` is correct (from the folder URL)
+
+**Issue:** "Module not found" errors
+- **Solution:** Run `pip install -r requirements.txt` to install dependencies
+
+**Issue:** Vercel deployment succeeds but Drive endpoints fail
+- **Solution:** Verify all environment variables are set in Vercel's Environment Variables settings
 
 ## Tasks
 
