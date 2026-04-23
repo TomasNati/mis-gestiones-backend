@@ -1,6 +1,6 @@
 from typing import Optional, Union
 from uuid import UUID
-from fastapi import FastAPI, HTTPException, Query, status
+from fastapi import FastAPI, HTTPException, Query, status, Header, Depends, File, UploadFile, Request
 from fastapi.responses import HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
 from db import (
@@ -12,6 +12,13 @@ from structure import CategoriaDeletionError, SubcategoriaDeletionError
 import db
 from models import CategoriaOut, CategoriasCrear, SubcategoriaOut, CategoriaBasicOut
 import models
+import os
+import hmac
+import io
+import mimetypes
+from urllib.parse import quote
+from fastapi.responses import StreamingResponse
+import drive
 
 
 app = FastAPI(
@@ -32,6 +39,7 @@ app.add_middleware( CORSMiddleware,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["Content-Disposition"],
 )
 
 
@@ -166,6 +174,74 @@ def eliminar_subcategoria(id: UUID):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+# Drive endpoints
+
+def require_api_key(x_api_key: str = Header(...)) -> None:
+    secret = os.getenv("BACKEND_SHARED_SECRET")
+    if not secret or not hmac.compare_digest(x_api_key, secret):
+        raise HTTPException(status_code=401, detail={"error": "Unauthorized", "message": "invalid or missing X-API-Key"})
+
+
+@app.get("/api/drive/files", response_model=models.DriveFileListOut, tags=["Drive"], dependencies=[Depends(require_api_key)])
+async def list_drive_files(q: Optional[str] = Query(None)):
+    files = drive.list_files(q)
+    return {"files": [models.DriveFileOut.model_validate(f) for f in files]}
+
+
+@app.get("/api/drive/files/{file_id}/download", tags=["Drive"])
+def download_drive_file(file_id: str, x_api_key: str = Header(...)):
+    # validate API key
+    require_api_key(x_api_key)
+    metadata = drive.get_file_in_folder(file_id)
+    if metadata is None:
+        raise HTTPException(status_code=404, detail={"error": "Not Found", "message": "file is not in the allowed folder"})
+    if drive.is_google_native(metadata.get("mimeType", "")):
+        raise HTTPException(status_code=415, detail={"error": "Unsupported Media Type", "message": "google-native file types cannot be downloaded directly"})
+    filename = metadata.get("name", "file")
+    headers = {"Content-Disposition": f'attachment; filename="{quote(filename)}"'}
+    return StreamingResponse(drive.download_stream(file_id), media_type=metadata.get("mimeType", "application/octet-stream"), headers=headers)
+
+
+@app.post("/api/drive/files", response_model=models.DriveUploadOut, tags=["Drive"])
+async def upload_drive_file(request: Request, file: UploadFile = File(...), overwrite: bool = Query(False), x_api_key: str = Header(...)):
+    require_api_key(x_api_key)
+    max_bytes = drive.MAX_UPLOAD_BYTES
+    content_length = request.headers.get("content-length")
+    if content_length is not None:
+        try:
+            if int(content_length) > max_bytes:
+                raise HTTPException(status_code=413, detail={"error": "Payload Too Large", "message": f"upload exceeds {max_bytes} bytes"})
+        except ValueError:
+            pass
+    buf = io.BytesIO()
+    total = 0
+    chunk_size = 262144
+    while True:
+        chunk = file.file.read(chunk_size)
+        if not chunk:
+            break
+        total += len(chunk)
+        if total > max_bytes:
+            raise HTTPException(status_code=413, detail={"error": "Payload Too Large", "message": f"upload exceeds {max_bytes} bytes"})
+        buf.write(chunk)
+    buf.seek(0)
+    mime = file.content_type
+    if not mime or mime == "application/octet-stream":
+        mime = mimetypes.guess_type(file.filename)[0] or "application/octet-stream"
+    matches = drive.find_by_name(file.filename)
+    if len(matches) == 0:
+        created = drive.create_file(file.filename, mime, buf)
+        return {"file": models.DriveFileOut.model_validate(created), "created": True}
+    elif len(matches) == 1:
+        if overwrite:
+            updated = drive.update_file_content(matches[0]["id"], mime, buf)
+            return {"file": models.DriveFileOut.model_validate(updated), "created": False}
+        else:
+            raise HTTPException(status_code=409, detail={"error": "Conflict", "message": f"a file named '{file.filename}' already exists; pass overwrite=true to replace it"})
+    else:
+        raise HTTPException(status_code=409, detail={"error": "Conflict", "message": f"multiple files named '{file.filename}' exist in the folder; resolve manually before uploading"})
+
 
 @app.get("/", response_class=HTMLResponse)
 def read_root():

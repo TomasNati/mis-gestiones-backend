@@ -19,6 +19,7 @@ Neither client (mobile nor web) talks to Google directly — credentials stay se
 **Scope:**
 
 In scope:
+
 - Single hard-coded folder via `GOOGLE_DRIVE_FOLDER_ID` (matches the mobile design).
 - Service-account auth via `GOOGLE_SA_CLIENT_EMAIL` + `GOOGLE_SA_PRIVATE_KEY`.
 - Folder-membership check on download to prevent arbitrary-file reads if the SA is ever shared into another folder.
@@ -28,6 +29,7 @@ In scope:
 - **Hard max upload size**, enforced server-side before any Drive call. Configurable via `MAX_UPLOAD_BYTES` env var (default 4,000,000 bytes ≈ 3.8 MB, safely under Vercel's ceiling once multipart overhead is counted). See D7.
 
 Out of scope:
+
 - Multi-folder / per-user access (single-user app).
 - Auth on the existing (non-Drive) endpoints — their behavior is unchanged by this plan.
 - Linking Drive files to `Vencimiento` records (deferred per mobile doc).
@@ -59,12 +61,15 @@ Use `google-api-python-client` + `google-auth` (not `googleapis`, which is the N
 ### D2 — Overwrite semantics
 
 When `overwrite=true` and a file with the same name exists:
+
 - Call `files.update(fileId=..., media_body=...)` — this **preserves the Drive ID**, so any stored references, share links, and revision history remain valid.
 
 When `overwrite=false` and a file with the same name exists:
+
 - Return **409 Conflict** with `{ "error": "Conflict", "message": "a file named '<name>' already exists; pass overwrite=true to replace it" }`.
 
 When no file with that name exists (either value of `overwrite`):
+
 - Call `files.create(media_body=...)` — create a new file in the folder.
 
 **Ambiguity:** Drive allows multiple files with the same name in one folder. If >1 match is found during an overwrite check, return **409** with a message asking the caller to resolve manually. We do not pick one arbitrarily. This keeps the behavior deterministic.
@@ -122,10 +127,44 @@ Before implementation, an agent should read:
 - `mis-gestiones-mobile/docs/google-drive-comprobantes.md` — upstream design decisions (folder ID scoping, error shape, streaming expectations).
 
 **CORS verification:** Confirm that `main.py`'s CORS middleware includes:
+
 - Web app origin in `allow_origins` (or uses `["*"]` for development).
 - `"X-API-Key"` in `allow_headers` so the web browser can send the auth header.
 - `expose_headers=["Content-Disposition"]` so the web client can read the download filename.
-If these are missing, add them before implementing the Drive endpoints.
+  If these are missing, add them before implementing the Drive endpoints.
+
+## One-time GCP setup (server-side)
+
+These are the steps required once to enable the backend to operate on the Drive folder:
+
+1. Enable the Google Drive API for your GCP project (APIs & Services → Enable APIs and Services → Google Drive API).
+2. Create a Service Account (IAM & Admin → Service Accounts). Give it a descriptive name (e.g. `mis-gestiones-drive-proxy`).
+3. Create and download a JSON key for the service account. From the JSON, note the `client_email` and the `private_key` values.
+4. In Google Drive, open the target folder, choose "Share", and add the service account's `client_email`. Grant Editor access if the backend must upload files; Viewer is sufficient for read-only.
+5. Obtain the folder ID from the Drive folder URL — the value after `/folders/` in the browser address bar — and set it as `GOOGLE_DRIVE_FOLDER_ID`.
+6. Configure deployment environment variables (Vercel / host):
+   - `GOOGLE_SA_CLIENT_EMAIL` — the service account `client_email`.
+   - `GOOGLE_SA_PRIVATE_KEY` — the `private_key` string from the JSON. If your platform strips newlines, replace real newlines with literal `\n`; the backend code calls `.replace("\\n","\n")` so either form works.
+   - `GOOGLE_DRIVE_FOLDER_ID` — the folder ID from step 5.
+   - `BACKEND_SHARED_SECRET` — a strong random secret used to validate `X-API-Key`.
+   - `MAX_UPLOAD_BYTES` — optional override of the default 4,000,000 bytes.
+
+PowerShell local testing example (do not store real secrets in repo):
+
+$env:GOOGLE_SA_CLIENT_EMAIL = "service-account@PROJECT.iam.gserviceaccount.com"
+$env:GOOGLE_SA_PRIVATE_KEY = "-----BEGIN PRIVATE KEY-----`nMII...`n-----END PRIVATE KEY-----`n"
+$env:GOOGLE_DRIVE_FOLDER_ID = "0Bxx..."
+$env:BACKEND_SHARED_SECRET = "replace-with-a-secure-random-string"
+
+Generate a secure shared secret:
+
+python -c "import secrets; print(secrets.token_urlsafe(32))"
+
+Security notes:
+
+- Never commit service account keys or .env files to source control. Use platform secret storage (Vercel environment variables, Azure Key Vault, etc.).
+- Limit the service account's permissions to Drive access only; prefer sharing the single folder instead of broad project roles when possible.
+- Rotate keys immediately if you suspect exposure.
 
 ## Tasks
 
@@ -160,6 +199,7 @@ Single subsystem. Keep tasks sequential — each depends on the previous.
 4. [ ] Helper `is_google_native(mime_type: str) -> bool` to detect Docs/Sheets/Slides MIME types (`application/vnd.google-apps.*`). Used by the download route to 415 instead of producing a broken stream.
 
 **Verify:**
+
 - `pip install -r requirements.txt` succeeds.
 - `python -c "import drive; print(drive._escape(\"a'b\"))"` prints `a\'b`.
 - With env vars set locally: `python -c "import drive; drive._build_service().files().list(pageSize=1).execute(); print('ok')"` prints `ok`. If env vars are unset, skip this step and note it.
@@ -213,12 +253,13 @@ Single subsystem. Keep tasks sequential — each depends on the previous.
      - 0 matches → `create_file(...)`, respond `DriveUploadOut(file=..., created=True)`, status 201.
      - 1 match, `overwrite=true` → `update_file_content(existing["id"], ...)`, respond `DriveUploadOut(file=..., created=False)`, status 200.
      - 1 match, `overwrite=false` → `HTTPException(409, "a file named '<name>' already exists; pass overwrite=true to replace it")`.
-     - >1 matches → `HTTPException(409, "multiple files named '<name>' exist in the folder; resolve manually before uploading")`.
+     - > 1 matches → `HTTPException(409, "multiple files named '<name>' exist in the folder; resolve manually before uploading")`.
    - Tag: `"Drive"`.
 
 5. [ ] Error mapping lives in `drive.py` (see Task 1). `main.py` catches `HttpError` raised by `drive.*` calls and re-raises via `drive.map_http_error(e)`. No logging in `main.py` — the mapper logs once at the boundary.
 
 **Verify:**
+
 - `uvicorn main:app --reload --port 5001`
 - `curl localhost:5001/api/drive/files` (no header) → 401
 - `curl localhost:5001/api/drive/files/<any-id>/download` (no header) → 401
@@ -270,6 +311,7 @@ Single subsystem. Keep tasks sequential — each depends on the previous.
 ## Review Notes
 
 Devil's-advocate review (2026-04-20) caught:
+
 - **Missing `python-multipart` dependency** — FastAPI `UploadFile` would have 500'd on first upload. Added to Task 1.
 - **Folder-membership check via `parents` is brittle** under Shared Drives and shortcuts. Replaced with a `files.list` parent-scoped lookup in `get_file_in_folder`.
 - **`find_by_name` did not filter `trashed = false`** — would false-positive on soft-deleted duplicates. Fixed.
