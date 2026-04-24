@@ -30,9 +30,11 @@ def _build_service():
     client_email = os.environ["GOOGLE_SA_CLIENT_EMAIL"]
     private_key = os.environ["GOOGLE_SA_PRIVATE_KEY"].replace("\\n", "\n")
     info = {
+        "type": "service_account",
         "client_email": client_email,
         "private_key": private_key,
-        "type": "service_account",
+        "token_uri": "https://oauth2.googleapis.com/token",
+        "project_id": os.environ.get("GOOGLE_SA_PROJECT_ID", "unknown-project"),
     }
     creds = service_account.Credentials.from_service_account_info(info, scopes=["https://www.googleapis.com/auth/drive"])
     service = build("drive", "v3", credentials=creds, cache_discovery=False)
@@ -63,7 +65,7 @@ def list_files(name_query: Optional[str] = None) -> List[Dict]:
         if name_query:
             q += f" and name contains '{_escape(name_query)}'"
         fields = "files(id,name,mimeType,size,modifiedTime)"
-        resp = service.files().list(q=q, orderBy="modifiedTime desc", pageSize=100, supportsAllDrives=True, includeItemsFromAllDrives=True, fields=f"files({fields})").execute()
+        resp = service.files().list(q=q, orderBy="modifiedTime desc", pageSize=100, supportsAllDrives=True, includeItemsFromAllDrives=True, fields=fields).execute()
         return resp.get("files", [])
     except HttpError as e:
         raise map_http_error(e)
@@ -74,7 +76,7 @@ def get_file_in_folder(file_id: str) -> Optional[Dict]:
         service = _build_service()
         q = f"'{GOOGLE_DRIVE_FOLDER_ID}' in parents and trashed = false and id = '{_escape(file_id)}'"
         fields = "files(id,name,mimeType,size,modifiedTime)"
-        resp = service.files().list(q=q, pageSize=1, supportsAllDrives=True, includeItemsFromAllDrives=True, fields=f"files({fields})").execute()
+        resp = service.files().list(q=q, pageSize=1, supportsAllDrives=True, includeItemsFromAllDrives=True, fields=fields).execute()
         files = resp.get("files", [])
         return files[0] if files else None
     except HttpError as e:
@@ -109,7 +111,7 @@ def find_by_name(name: str) -> List[Dict]:
         service = _build_service()
         q = f"'{GOOGLE_DRIVE_FOLDER_ID}' in parents and trashed = false and name = '{_escape(name)}'"
         fields = "files(id,name,mimeType,size,modifiedTime)"
-        resp = service.files().list(q=q, supportsAllDrives=True, includeItemsFromAllDrives=True, fields=f"files({fields})").execute()
+        resp = service.files().list(q=q, supportsAllDrives=True, includeItemsFromAllDrives=True, fields=fields).execute()
         return resp.get("files", [])
     except HttpError as e:
         raise map_http_error(e)
