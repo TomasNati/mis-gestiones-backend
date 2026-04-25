@@ -1,7 +1,7 @@
 from typing import Optional, Union
 from uuid import UUID
 from datetime import datetime
-from fastapi import FastAPI, HTTPException, Query, status, Header, Depends, File, UploadFile, Request
+from fastapi import FastAPI, HTTPException, Query, status, Header, Depends
 from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from db import (
@@ -15,8 +15,7 @@ from models import CategoriaOut, CategoriasCrear, SubcategoriaOut, CategoriaBasi
 import models
 import os
 import hmac
-import io
-import mimetypes
+
 from urllib.parse import quote
 import logging
 from dotenv import load_dotenv
@@ -242,44 +241,6 @@ def download_drive_file(file_id: str, path: Optional[str] = Query(None), x_api_k
     return StreamingResponse(drive.download_stream(file_id), media_type=metadata.get("mimeType", "application/octet-stream"), headers=headers)
 
 
-@app.post("/api/drive/files", response_model=models.DriveUploadOut, tags=["Drive"])
-async def upload_drive_file(request: Request, file: UploadFile = File(...), overwrite: bool = Query(False), x_api_key: str = Header(...)):
-    require_api_key(x_api_key)
-    max_bytes = drive.MAX_UPLOAD_BYTES
-    content_length = request.headers.get("content-length")
-    if content_length is not None:
-        try:
-            if int(content_length) > max_bytes:
-                raise HTTPException(status_code=413, detail={"error": "Payload Too Large", "message": f"upload exceeds {max_bytes} bytes"})
-        except ValueError:
-            pass
-    buf = io.BytesIO()
-    total = 0
-    chunk_size = 262144
-    while True:
-        chunk = file.file.read(chunk_size)
-        if not chunk:
-            break
-        total += len(chunk)
-        if total > max_bytes:
-            raise HTTPException(status_code=413, detail={"error": "Payload Too Large", "message": f"upload exceeds {max_bytes} bytes"})
-        buf.write(chunk)
-    buf.seek(0)
-    mime = file.content_type
-    if not mime or mime == "application/octet-stream":
-        mime = mimetypes.guess_type(file.filename)[0] or "application/octet-stream"
-    matches = drive.find_by_name(file.filename)
-    if len(matches) == 0:
-        created = drive.create_file(file.filename, mime, buf)
-        return {"file": models.DriveFileOut.model_validate(created), "created": True}
-    elif len(matches) == 1:
-        if overwrite:
-            updated = drive.update_file_content(matches[0]["id"], mime, buf)
-            return {"file": models.DriveFileOut.model_validate(updated), "created": False}
-        else:
-            raise HTTPException(status_code=409, detail={"error": "Conflict", "message": f"a file named '{file.filename}' already exists; pass overwrite=true to replace it"})
-    else:
-        raise HTTPException(status_code=409, detail={"error": "Conflict", "message": f"multiple files named '{file.filename}' exist in the folder; resolve manually before uploading"})
 
 
 @app.get("/", response_class=HTMLResponse)

@@ -8,11 +8,12 @@
 
 **Problem:** The mobile app and web app need to browse, fetch, and store payment receipts ("comprobantes") that live in a Google Drive folder. The mobile-side design proposes a backend proxy using a service account, but no endpoints exist yet in this FastAPI backend. The mobile doc scoped upload out of v1 — this plan expands the scope to include it for both clients.
 
-**Goal:** Three endpoints on the existing Vercel + FastAPI service so both the mobile and web apps can:
+**Goal:** Two endpoints on the existing Vercel + FastAPI service so both the mobile and web apps can:
 
 - **List** files in the configured Drive folder (optional substring filter).
 - **Download** a file by ID, streamed through the backend.
-- **Upload** a file to the folder, with a query-param toggle for overwrite behavior when a file with the same name already exists.
+
+_Note: The previously-planned server-side upload using the service account has been removed from this plan due to observed runtime errors — see "Runtime error observed (2026-04-25)" in Troubleshooting for details and the chosen alternative._
 
 Neither client (mobile nor web) talks to Google directly — credentials stay server-side on Vercel.
 
@@ -43,8 +44,7 @@ Out of scope:
 - [ ] `GET /api/drive/files` returns files in the configured folder with `id, name, mimeType, size, modifiedTime`, sorted by `modifiedTime desc`.
 - [ ] `GET /api/drive/files?q=luz` filters by name substring (server-side).
 - [ ] `GET /api/drive/files/{id}/download` streams the file bytes with correct `Content-Type` and `Content-Disposition`, and returns 404 if the file is not in the configured folder.
-- [ ] `POST /api/drive/files?overwrite=false` with a multipart body creates a new file; returns 409 if a file with the same name already exists.
-- [ ] `POST /api/drive/files?overwrite=true` updates the content of the existing file (same Drive ID) or creates it if not present.
+- [ ] Upload endpoint removed from this plan due to service-account storage quota errors; see "Runtime error observed (2026-04-25)" in Troubleshooting for details and the chosen server-side OAuth alternative.
 - [ ] Drive API errors (403, 404, 5xx) map to appropriate HTTP statuses with the standard error shape.
 - [ ] `q` and filename values containing `'` or `\` are safely escaped in Drive's query language.
 - [ ] `modifiedTime` is returned as a timezone-aware ISO-8601 string (RFC-3339 `Z`).
@@ -330,6 +330,17 @@ MAX_UPLOAD_BYTES=4000000
 
 ### Troubleshooting Common Issues
 
+### Runtime error observed (2026-04-25)
+During an attempted upload using the service account, the backend returned the following Drive API error (403 storageQuotaExceeded):
+
+```text
+WARNING:googleapiclient.http:Encountered 403 Forbidden with reason "storageQuotaExceeded"
+ERROR:drive:Drive API error 403: b'{\n  "error": {\n    "code": 403,\n    "message": "Service Accounts do not have storage quota. Leverage shared drives (https://developers.google.com/workspace/drive/api/guides/about-shareddrives), or use OAuth delegation (http://support.google.com/a/answer/7281227) instead.",\n    "errors": [\n      {\n        "message": "Service Accounts do not have storage quota. Leverage shared drives (https://developers.google.com/workspace/drive/api/guides/about-shareddrives), or use OAuth delegation (http://support.google.com/a/answer/7281227) instead.",\n        "domain": "usageLimits",\n        "reason": "storageQuotaExceeded"\n      }\n    ]\n  }\n}\n'
+```
+
+Decision: the upload endpoint that used the service account has been removed from this plan because service accounts do not have personal Drive storage quota. Latest proposed solution: backend/server-side OAuth — clients upload to this backend and the backend uses an OAuth refresh token obtained via one-time user consent to upload to the user's Google Drive (using the user's personal quota). This avoids service-account quota limits while keeping uploads controlled server-side.
+
+
 **Issue:** "The caller does not have permission"
 - **Solution:** Ensure the service account email is shared with the folder with Editor permissions
 
@@ -422,7 +433,7 @@ Single subsystem. Keep tasks sequential — each depends on the previous.
    - `HttpError` → `drive.map_http_error`.
    - **Web client note:** Browser downloads will trigger automatically due to `Content-Disposition: attachment`. The web app can also use `fetch()` and read the blob if it wants to preview PDFs inline.
 
-4. [ ] `POST /api/drive/files`:
+4. [ ] Upload endpoint removed from this plan (see "Runtime error observed (2026-04-25)" in Troubleshooting). The chosen alternative is a backend/server-side OAuth flow; implementation details will be documented separately.
    - Accepts `file: UploadFile = File(...)` and `overwrite: bool = Query(False)`.
    - **Size check (before Drive)**:
      - If `request.headers.get("content-length")` is present and > `drive.MAX_UPLOAD_BYTES` → 413 immediately, with `{ "error": "Payload Too Large", "message": "upload exceeds <N> bytes" }`.

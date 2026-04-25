@@ -147,37 +147,3 @@ def download_stream(file_id: str) -> Iterator[bytes]:
         raise map_http_error(e)
 
 
-def find_by_name(name: str) -> List[Dict]:
-    try:
-        service = _build_service()
-        q = f"'{GOOGLE_DRIVE_FOLDER_ID}' in parents and trashed = false and name = '{_escape(name)}'"
-        fields = "files(id,name,mimeType,size,modifiedTime)"
-        resp = service.files().list(q=q, supportsAllDrives=True, includeItemsFromAllDrives=True, fields=fields).execute()
-        return resp.get("files", [])
-    except HttpError as e:
-        raise map_http_error(e)
-
-
-def create_file(name: str, mime_type: str, data: BinaryIO) -> Dict:
-    try:
-        service = _build_service()
-        if hasattr(data, 'seek'):
-            data.seek(0)
-        media = MediaIoBaseUpload(data, mimetype=mime_type, resumable=False)
-        body = {"name": name, "parents": [GOOGLE_DRIVE_FOLDER_ID]}
-        file = service.files().create(body=body, media_body=media, supportsAllDrives=True, fields="id,name,mimeType,size,modifiedTime").execute()
-        return file
-    except HttpError as e:
-        raise map_http_error(e)
-
-
-def update_file_content(file_id: str, mime_type: str, data: BinaryIO) -> Dict:
-    try:
-        service = _build_service()
-        if hasattr(data, 'seek'):
-            data.seek(0)
-        media = MediaIoBaseUpload(data, mimetype=mime_type, resumable=False)
-        file = service.files().update(fileId=file_id, media_body=media, supportsAllDrives=True, fields="id,name,mimeType,size,modifiedTime").execute()
-        return file
-    except HttpError as e:
-        raise map_http_error(e)
