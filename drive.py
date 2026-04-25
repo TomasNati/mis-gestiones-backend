@@ -58,27 +58,68 @@ def map_http_error(e: HttpError) -> HTTPException:
     return HTTPException(status_code=502, detail={"error": "Drive Error", "message": "an error occurred communicating with Google Drive"})
 
 
-def list_files(name_query: Optional[str] = None) -> List[Dict]:
+def list_files(name_query: Optional[str] = None, folder_id: Optional[str] = None, created_from: Optional[str] = None, created_to: Optional[str] = None) -> List[Dict]:
     try:
         service = _build_service()
-        q = f"'{GOOGLE_DRIVE_FOLDER_ID}' in parents and trashed = false"
+        # If a specific folder_id was provided, list its children; otherwise use the configured root folder
+        if folder_id:
+            q = f"'{_escape(folder_id)}' in parents and trashed = false"
+        else:
+            q = f"'{GOOGLE_DRIVE_FOLDER_ID}' in parents and trashed = false"
         if name_query:
             q += f" and name contains '{_escape(name_query)}'"
-        fields = "files(id,name,mimeType,size,modifiedTime)"
+        if created_from:
+            q += f" and createdTime >= '{_escape(created_from)}'"
+        if created_to:
+            q += f" and createdTime <= '{_escape(created_to)}'"
+        fields = "files(id,name,mimeType,size,modifiedTime,createdTime)"
         resp = service.files().list(q=q, orderBy="modifiedTime desc", pageSize=100, supportsAllDrives=True, includeItemsFromAllDrives=True, fields=fields).execute()
         return resp.get("files", [])
     except HttpError as e:
         raise map_http_error(e)
 
 
-def get_file_in_folder(file_id: str) -> Optional[Dict]:
+def get_folder_id_by_path(path: str) -> Optional[str]:
+    """Resolve a path (supports both '/' and '\\') relative to GOOGLE_DRIVE_FOLDER_ID to a folder id.
+    Returns None if any segment does not exist.
+    """
     try:
         service = _build_service()
-        q = f"'{GOOGLE_DRIVE_FOLDER_ID}' in parents and trashed = false and id = '{_escape(file_id)}'"
-        fields = "files(id,name,mimeType,size,modifiedTime)"
-        resp = service.files().list(q=q, pageSize=1, supportsAllDrives=True, includeItemsFromAllDrives=True, fields=fields).execute()
-        files = resp.get("files", [])
-        return files[0] if files else None
+        # Normalize backslashes to forward slashes so callers can use Windows-style paths like "FOLDER\\sub"
+        normalized = path.replace("\\", "/")
+        parts = [p for p in normalized.strip("/").split("/") if p]
+        parent = GOOGLE_DRIVE_FOLDER_ID
+        for part in parts:
+            q = f"'{parent}' in parents and trashed = false and mimeType = 'application/vnd.google-apps.folder' and name = '{_escape(part)}'"
+            resp = service.files().list(q=q, pageSize=1, supportsAllDrives=True, includeItemsFromAllDrives=True, fields="files(id)").execute()
+            files = resp.get("files", [])
+            if not files:
+                return None
+            parent = files[0]["id"]
+        return parent
+    except HttpError as e:
+        raise map_http_error(e)
+
+
+def get_file_in_folder(file_id: str, folder_id: Optional[str] = None) -> Optional[Dict]:
+    """Return metadata for file_id only if it is a direct child of folder_id (or the configured root folder when folder_id is None).
+
+    Uses files().get to avoid constructing complex q strings which can trigger "Invalid Value" errors.
+    """
+    try:
+        service = _build_service()
+        # Fetch file metadata directly
+        fields = "id,name,mimeType,size,modifiedTime,parents"
+        file = service.files().get(fileId=_escape(file_id), supportsAllDrives=True, fields=fields).execute()
+        if not file:
+            return None
+        parent = folder_id or GOOGLE_DRIVE_FOLDER_ID
+        parents = file.get("parents", []) or []
+        # Check direct parent membership
+        if parent in parents:
+            return file
+        else:
+            return None
     except HttpError as e:
         raise map_http_error(e)
 
