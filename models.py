@@ -171,3 +171,66 @@ class DriveUploadOut(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+# ============================================================================
+# COTIZACIONES / MARKET QUOTES MODELS
+# ============================================================================
+
+class DolarOut(BaseModel):
+    """USD/ARS exchange rate response"""
+    tipo: str
+    moneda: str
+    casa: str
+    nombre: str
+    compra: Optional[float] = None
+    venta: Optional[float] = None
+    fecha_actualizacion: Optional[str] = None
+    
+    class Config:
+        from_attributes = True
+
+
+class CryptoOut(BaseModel):
+    """Cryptocurrency price response"""
+    id: str
+    nombre: str
+    precio_usd: Optional[float] = None
+    precio_ars: Optional[float] = None
+    cambio_24h_usd: Optional[float] = None
+    market_cap_usd: Optional[float] = None
+    fecha_actualizacion: Optional[str] = None
+    
+    class Config:
+        from_attributes = True
+
+
+class InstrumentoPriceOut(BaseModel):
+    """Instrument latest price response (scraped from IOL public quote page)"""
+    ticker: str
+    precio: float
+    precio_raw: str
+    simbolo_moneda: str
+    moneda: str
+    fuente: str
+    url: str
+    fecha_consulta: str
+
+    class Config:
+        from_attributes = True
+
+
+class CryptoTopOut(BaseModel):
+    """Top cryptocurrency response"""
+    id: str
+    simbolo: str
+    nombre: str
+    precio_actual: Optional[float] = None
+    market_cap: Optional[float] = None
+    volumen_24h: Optional[float] = None
+    cambio_24h: Optional[float] = None
+    imagen: Optional[str] = None
+    moneda: str
+
+    class Config:
+        from_attributes = True

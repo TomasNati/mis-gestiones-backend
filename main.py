@@ -19,6 +19,7 @@ import mimetypes
 from urllib.parse import quote
 from fastapi.responses import StreamingResponse
 import drive
+from services import get_exchange_service, get_crypto_service, get_instrumento_service
 
 
 app = FastAPI(
@@ -241,6 +242,100 @@ async def upload_drive_file(request: Request, file: UploadFile = File(...), over
             raise HTTPException(status_code=409, detail={"error": "Conflict", "message": f"a file named '{file.filename}' already exists; pass overwrite=true to replace it"})
     else:
         raise HTTPException(status_code=409, detail={"error": "Conflict", "message": f"multiple files named '{file.filename}' exist in the folder; resolve manually before uploading"})
+
+
+# ============================================================================
+# COTIZACIONES / MARKET QUOTES ENDPOINTS
+# ============================================================================
+
+@app.get("/api/cotizaciones/instrumento/{ticker}", response_model=models.InstrumentoPriceOut, tags=["Cotizaciones"])
+async def get_instrumento_price(ticker: str):
+    """
+    Get the latest price + currency of a financial instrument by scraping the
+    public IOL quote page.
+
+    The endpoint loads `https://iol.invertironline.com/titulo/cotizacion/BCBA/{ticker}`
+    and extracts both the currency symbol (sibling `<span>$</span>` or
+    `<span>US$</span>`) and the latest price (`<span data-field="UltimoPrecio">`)
+    from inside the `<span id="IdTitulo">` container.
+    """
+    try:
+        instrumento_service = get_instrumento_service()
+        return await instrumento_service.get_price(ticker)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except ConnectionError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error fetching instrument price: {str(e)}")
+
+
+@app.get("/api/cotizaciones/dolar", response_model=list[models.DolarOut], tags=["Cotizaciones"])
+async def get_all_dolar_rates():
+    """Get all USD/ARS exchange rates from DolarAPI"""
+    try:
+        exchange_service = get_exchange_service()
+        data = await exchange_service.get_all_dolares()
+        
+        # Normalize to match our model
+        results = []
+        for item in data:
+            results.append({
+                "tipo": item.get("casa", ""),
+                "moneda": item.get("moneda", "USD"),
+                "casa": item.get("casa", ""),
+                "nombre": item.get("nombre", ""),
+                "compra": item.get("compra"),
+                "venta": item.get("venta"),
+                "fecha_actualizacion": item.get("fechaActualizacion")
+            })
+        return results
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error fetching exchange rates: {str(e)}")
+
+
+@app.get("/api/cotizaciones/dolar/{tipo}", response_model=models.DolarOut, tags=["Cotizaciones"])
+async def get_dolar_especifico(tipo: str):
+    """
+    Get specific USD/ARS exchange rate from DolarAPI
+    
+    Available types: oficial, blue, bolsa (MEP), contadoconliqui (CCL), mayorista, cripto, tarjeta
+    """
+    try:
+        exchange_service = get_exchange_service()
+        data = await exchange_service.get_dolar_especifico(tipo)
+        return data
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error fetching {tipo} rate: {str(e)}")
+
+
+@app.get("/api/cotizaciones/crypto/{crypto_id}", response_model=models.CryptoOut, tags=["Cotizaciones"])
+async def get_crypto_price(crypto_id: str):
+    """
+    Get cryptocurrency price in USD and ARS from CoinGecko
+    
+    Common IDs: bitcoin, ethereum, cardano, dogecoin, litecoin, ripple, etc.
+    """
+    try:
+        crypto_service = get_crypto_service()
+        data = await crypto_service.get_crypto(crypto_id)
+        return data
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error fetching crypto price: {str(e)}")
+
+
+@app.get("/api/cotizaciones/crypto/top/{limit}", response_model=list[models.CryptoTopOut], tags=["Cotizaciones"])
+async def get_top_cryptos(
+    limit: int = 10,
+    vs_currency: str = Query("usd", description="Currency: usd, ars, eur, etc.")
+):
+    """Get top cryptocurrencies by market cap from CoinGecko"""
+    try:
+        crypto_service = get_crypto_service()
+        data = await crypto_service.get_top_cryptos(vs_currency=vs_currency, limit=limit)
+        return data
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error fetching top cryptos: {str(e)}")
 
 
 @app.get("/", response_class=HTMLResponse)
