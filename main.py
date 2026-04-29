@@ -22,7 +22,7 @@ from dotenv import load_dotenv
 load_dotenv()
 logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO"))
 import drive
-from services import get_exchange_service, get_crypto_service, get_instrumento_service
+from services import get_exchange_service, get_crypto_service, get_instrumento_service, get_fci_service
 
 
 app = FastAPI(
@@ -268,6 +268,98 @@ async def get_instrumento_price(ticker: str):
         raise HTTPException(status_code=503, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error fetching instrument price: {str(e)}")
+
+
+@app.get("/api/cotizaciones/fci/clase-fondos", response_model=models.ClaseFondoSearchOut, tags=["Cotizaciones"])
+async def search_clase_fondos(
+    id: Optional[str] = Query(None, description="Optional exact clase_fondo id."),
+    nombre: Optional[str] = Query(None, description="Optional comma-separated keywords. Each must appear in the clase_fondo's `nombre` (case-insensitive)."),
+    fondoId: Optional[str] = Query(None, description="Optional parent fondo id (matches `clase_fondo.fondoId`)."),
+    clear_cache: bool = Query(False, description="If true, refresh the CAFCI catalog cache (24h) and this search's result cache before searching."),
+):
+    """
+    Search clase_fondos across the CAFCI catalog by `id`, `nombre`, and/or `fondoId`.
+
+    At least one of `id`, `nombre`, or `fondoId` must be provided.
+
+    The CAFCI catalog (>1000 entities) is cached for 24 hours; pass
+    `clear_cache=true` to force a refresh.
+
+    Returns a list of clase_fondos with `id`, `nombre`, `monedaId`, `fondoId`.
+    """
+    from services.fci_service import InvalidFilterError
+    try:
+        fci_service = get_fci_service()
+        results = await fci_service.search_clase_fondos(
+            id=id, nombre=nombre, fondo_id=fondoId, clear_cache=clear_cache
+        )
+        return {"clase_fondos": results}
+    except InvalidFilterError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except ConnectionError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error fetching clase_fondos: {str(e)}")
+
+
+@app.get("/api/cotizaciones/fci/search", response_model=models.FCISearchOut, tags=["Cotizaciones"])
+async def search_fcis(
+    codigo_cnv: Optional[str] = Query(None, description="Optional exact CNV code."),
+    nombre: Optional[str] = Query(None, description="Optional comma-separated keywords. Each must appear in the fund's `nombre` (case-insensitive)."),
+    clear_cache: bool = Query(False, description="If true, refresh the CAFCI catalog cache (24h) and this search's result cache before searching."),
+):
+    """
+    Search the CAFCI catalog by `codigoCNV` and/or `nombre`.
+
+    At least one of `codigo_cnv` or `nombre` must be provided.
+
+    The CAFCI catalog (>1000 entities) is cached for 24 hours; pass
+    `clear_cache=true` to force a refresh.
+
+    Returns a list of matching funds, each with the fund's full JSON
+    serialized as a string.
+    """
+    from services.fci_service import InvalidFilterError
+    try:
+        fci_service = get_fci_service()
+        results = await fci_service.search(
+            codigo_cnv=codigo_cnv, nombre=nombre, clear_cache=clear_cache
+        )
+        return {"fcis": results}
+    except InvalidFilterError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except ConnectionError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error fetching FCI info: {str(e)}")
+
+
+@app.get("/api/cotizaciones/fci/{fondo_id}/{clase_id}", response_model=models.FCIQuoteOut, tags=["Cotizaciones"])
+async def get_fci_quote(fondo_id: str, clase_id: str):
+    """
+    Get the latest quote for a mutual fund (FCI) from CAFCI.
+
+    `fondo_id` and `clase_id` are the numeric ids that appear in the CAFCI
+    URL `.../fondo/<fondo_id>/clase/<clase_id>/ficha` — i.e. the parent fondo
+    id and the share class (clase_fondo) id (e.g. `fondo_id=739`,
+    `clase_id=1611` → "Allaria Dólar Latam - Clase A").
+
+    Returns the latest `vcpUnitario` (price), date, fund name and currency
+    (`ARS` for `monedaId=1`, `USD` for `monedaId=2`).
+    """
+    try:
+        fci_service = get_fci_service()
+        return await fci_service.get_quote(fondo_id, clase_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except ConnectionError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error fetching FCI quote: {str(e)}")
 
 
 @app.get("/api/cotizaciones/dolar", response_model=list[models.DolarOut], tags=["Cotizaciones"])

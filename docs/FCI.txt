@@ -1,0 +1,44 @@
+To read 'quotes' for mutual funds, you can use these steps:
+. Request a Type and a Code, but numbers.
+2. call https://www.cafci.org.ar/ficha-fondo.html?q=<type>;<code>
+3. That will trigger a number of requests to the server. One  should be 
+  	https://api.pub.cafci.org.ar/fondo/<type>/clase/<code>/ficha
+
+    The response shoudl be something like (showing only relevant parts):
+    {
+      "success": true,
+      "data": {
+        "model": {
+          "id": "1076",
+          "nombre": "Consultatio Renta Nacional - Clase A",
+          "monedaId": "1",
+        },
+        "info": {
+          "diaria": {
+            "actual": {
+              "fecha": "28/04/2026",
+              "vcpUnitario": "206.319602",
+            },
+          
+          },
+        }
+      }
+    }
+
+    MonedaId is 1 for ARS, 2 for USD The 'vcpUnitario' is the price of the fund on that date.
+    Importyant: calling the api method without accessing the first url will throw a 403 errror.
+
+Known funds:
+
+| Name                                     | Type | Code |
+|------------------------------------------|------|------|
+| Allaria Latam Clase A - Divisa           | 739  | 1611 |
+| Balanz Ahorro en USD Clase A             | 787  | 2096 |
+| Consultatio Acciones Argentinas Clase A  | 216  | 1208 |
+| Consultatio Balance Fund - Clase A       | 89   | 1207 |
+| Consultatio Deuda Argentina Clase A      | 281  | 1073 |
+| Consultatio Renta Fija Argentina Clase A | 495  | 998  |
+| Consultatio Renta Nacional Clase A       | 532  | 1076 |
+| IAM Renta Plus Clase A                   | 633  | 1286 |
+| Lombard Renta en Pesos                   | 75   | 75   |
+
