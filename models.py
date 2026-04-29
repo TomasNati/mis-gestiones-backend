@@ -220,6 +220,59 @@ class InstrumentoPriceOut(BaseModel):
         from_attributes = True
 
 
+class ClaseFondoOut(BaseModel):
+    """A single share class entry from a fondo's `clase_fondos`."""
+    id: str
+    nombre: Optional[str] = None
+    monedaId: Optional[str] = None
+    fondoId: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+class FCIInfoOut(BaseModel):
+    """FCI catalog entry response."""
+    codigoCNV: str
+    nombre: Optional[str] = None
+    clase_fondos: list[ClaseFondoOut] = []
+
+    class Config:
+        from_attributes = True
+
+
+class FCISearchOut(BaseModel):
+    """Wrapper for a list of FCI catalog matches."""
+    fcis: list[FCIInfoOut]
+
+    class Config:
+        from_attributes = True
+
+
+class ClaseFondoSearchOut(BaseModel):
+    """Wrapper for a list of clase_fondo matches."""
+    clase_fondos: list[ClaseFondoOut]
+
+    class Config:
+        from_attributes = True
+
+
+class FCIQuoteOut(BaseModel):
+    """FCI (mutual fund) quote response (fetched from CAFCI public ficha)"""
+    fondo_id: str
+    clase_id: str
+    nombre: Optional[str] = None
+    moneda: str
+    fecha: Optional[str] = None
+    vcp_unitario: float
+    fuente: str
+    url: str
+    fecha_consulta: str
+
+    class Config:
+        from_attributes = True
+
+
 class CryptoTopOut(BaseModel):
     """Top cryptocurrency response"""
     id: str
