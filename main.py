@@ -1,7 +1,8 @@
 from typing import Optional, Union
 from uuid import UUID
-from fastapi import FastAPI, HTTPException, Query, status, Header, Depends, File, UploadFile, Request
-from fastapi.responses import HTMLResponse
+from datetime import datetime
+from fastapi import FastAPI, HTTPException, Query, status, Header, Depends
+from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from db import (
     obtener_categoria_por_id,
@@ -14,10 +15,12 @@ from models import CategoriaOut, CategoriasCrear, SubcategoriaOut, CategoriaBasi
 import models
 import os
 import hmac
-import io
-import mimetypes
+
 from urllib.parse import quote
-from fastapi.responses import StreamingResponse
+import logging
+from dotenv import load_dotenv
+load_dotenv()
+logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO"))
 import drive
 from services import get_exchange_service, get_crypto_service, get_instrumento_service, get_fci_service
 
@@ -185,16 +188,51 @@ def require_api_key(x_api_key: str = Header(...)) -> None:
 
 
 @app.get("/api/drive/files", response_model=models.DriveFileListOut, tags=["Drive"], dependencies=[Depends(require_api_key)])
-async def list_drive_files(q: Optional[str] = Query(None)):
-    files = drive.list_files(q)
+async def list_drive_files(
+    path: Optional[str] = Query(None),
+    name: Optional[str] = Query(None),
+    created_from: Optional[str] = Query(None),
+    created_to: Optional[str] = Query(None),
+):
+    # validate created_from/created_to are ISO 8601 dates or datetimes
+    def _normalize_dt(s: Optional[str]) -> Optional[str]:
+        if s is None:
+            return None
+        s2 = s
+        # accept trailing Z by converting to +00:00
+        if s2.endswith('Z'):
+            s2 = s2[:-1] + '+00:00'
+        # allow date-only (YYYY-MM-DD)
+        if len(s2) == 10:
+            s2 = s2 + 'T00:00:00'
+        try:
+            datetime.fromisoformat(s2)
+        except Exception:
+            raise HTTPException(status_code=400, detail=f"Invalid date format: '{s}'. Use ISO 8601 date or datetime.")
+        return s2
+
+    created_from = _normalize_dt(created_from)
+    created_to = _normalize_dt(created_to)
+
+    folder_id = None
+    if path:
+        folder_id = drive.get_folder_id_by_path(path)
+        if folder_id is None:
+            return {"files": []}
+    files = drive.list_files(name_query=name, folder_id=folder_id, created_from=created_from, created_to=created_to)
     return {"files": [models.DriveFileOut.model_validate(f) for f in files]}
 
 
 @app.get("/api/drive/files/{file_id}/download", tags=["Drive"])
-def download_drive_file(file_id: str, x_api_key: str = Header(...)):
+def download_drive_file(file_id: str, path: Optional[str] = Query(None), x_api_key: str = Header(...)):
     # validate API key
     require_api_key(x_api_key)
-    metadata = drive.get_file_in_folder(file_id)
+    folder_id = None
+    if path:
+        folder_id = drive.get_folder_id_by_path(path)
+        if folder_id is None:
+            raise HTTPException(status_code=404, detail={"error": "Not Found", "message": "requested path does not exist"})
+    metadata = drive.get_file_in_folder(file_id, folder_id=folder_id)
     if metadata is None:
         raise HTTPException(status_code=404, detail={"error": "Not Found", "message": "file is not in the allowed folder"})
     if drive.is_google_native(metadata.get("mimeType", "")):
@@ -204,44 +242,6 @@ def download_drive_file(file_id: str, x_api_key: str = Header(...)):
     return StreamingResponse(drive.download_stream(file_id), media_type=metadata.get("mimeType", "application/octet-stream"), headers=headers)
 
 
-@app.post("/api/drive/files", response_model=models.DriveUploadOut, tags=["Drive"])
-async def upload_drive_file(request: Request, file: UploadFile = File(...), overwrite: bool = Query(False), x_api_key: str = Header(...)):
-    require_api_key(x_api_key)
-    max_bytes = drive.MAX_UPLOAD_BYTES
-    content_length = request.headers.get("content-length")
-    if content_length is not None:
-        try:
-            if int(content_length) > max_bytes:
-                raise HTTPException(status_code=413, detail={"error": "Payload Too Large", "message": f"upload exceeds {max_bytes} bytes"})
-        except ValueError:
-            pass
-    buf = io.BytesIO()
-    total = 0
-    chunk_size = 262144
-    while True:
-        chunk = file.file.read(chunk_size)
-        if not chunk:
-            break
-        total += len(chunk)
-        if total > max_bytes:
-            raise HTTPException(status_code=413, detail={"error": "Payload Too Large", "message": f"upload exceeds {max_bytes} bytes"})
-        buf.write(chunk)
-    buf.seek(0)
-    mime = file.content_type
-    if not mime or mime == "application/octet-stream":
-        mime = mimetypes.guess_type(file.filename)[0] or "application/octet-stream"
-    matches = drive.find_by_name(file.filename)
-    if len(matches) == 0:
-        created = drive.create_file(file.filename, mime, buf)
-        return {"file": models.DriveFileOut.model_validate(created), "created": True}
-    elif len(matches) == 1:
-        if overwrite:
-            updated = drive.update_file_content(matches[0]["id"], mime, buf)
-            return {"file": models.DriveFileOut.model_validate(updated), "created": False}
-        else:
-            raise HTTPException(status_code=409, detail={"error": "Conflict", "message": f"a file named '{file.filename}' already exists; pass overwrite=true to replace it"})
-    else:
-        raise HTTPException(status_code=409, detail={"error": "Conflict", "message": f"multiple files named '{file.filename}' exist in the folder; resolve manually before uploading"})
 
 
 # ============================================================================
