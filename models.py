@@ -287,3 +287,74 @@ class CryptoTopOut(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+# ============================================================================
+# INVERSIONES MODELS
+# ============================================================================
+
+from enums import InstrumentoTipo, ClaseRenta, Moneda
+
+
+class InstrumentoCrear(BaseModel):
+    nombre: str
+    codigo: Optional[str] = None
+    tipo: InstrumentoTipo
+    clase_renta: ClaseRenta
+    broker: Optional[str] = None
+    moneda: Moneda
+
+    class Config:
+        from_attributes = True
+
+
+class InstrumentoOut(InstrumentoCrear):
+    id: uuid.UUID
+    active: bool
+    created_at: Optional[datetime.datetime] = None
+    updated_at: Optional[datetime.datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
+class PrecioCrear(BaseModel):
+    monto: float
+    fecha: datetime.datetime
+    instrumento_id: uuid.UUID
+
+    class Config:
+        from_attributes = True
+
+
+class PrecioOut(BaseModel):
+    id: uuid.UUID
+    active: bool
+    monto: float
+    fecha: datetime.datetime
+    instrumentoId: uuid.UUID
+    created_at: Optional[datetime.datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
+class InversionCrear(BaseModel):
+    cantidad: float
+    precio_id: uuid.UUID
+    ultima: Optional[bool] = False
+
+    class Config:
+        from_attributes = True
+
+
+class InversionOut(BaseModel):
+    id: uuid.UUID
+    active: bool
+    ultima: bool
+    cantidad: float
+    precio: PrecioOut
+    created_at: Optional[datetime.datetime] = None
+
+    class Config:
+        from_attributes = True

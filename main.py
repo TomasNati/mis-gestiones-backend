@@ -8,10 +8,19 @@ from db import (
     obtener_categoria_por_id,
     obtener_categorias,
     obtener_subcategorias,
+    crear_instrumento,
+    obtener_instrumentos,
+    obtener_instrumento_por_id,
+    actualizar_instrumento,
+    crear_precio,
+    obtener_precios,
+    crear_inversion,
+    obtener_inversiones,
 )
 from structure import CategoriaDeletionError, SubcategoriaDeletionError
 import db
-from models import CategoriaOut, CategoriasCrear, SubcategoriaOut, CategoriaBasicOut
+from models import CategoriaOut, CategoriasCrear, SubcategoriaOut, CategoriaBasicOut, InstrumentoCrear, InstrumentoOut, PrecioCrear, PrecioOut, InversionCrear, InversionOut
+from enums import instrumento_tipo_values, clase_renta_values, moneda_values
 import models
 import os
 import hmac
@@ -178,6 +187,101 @@ def eliminar_subcategoria(id: UUID):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+# INVERSIONES endpoints
+
+@app.get("/api/instrumentos", response_model=list[InstrumentoOut], tags=["Inversiones"])
+def get_instrumentos(
+    id: Optional[UUID] = Query(None),
+    nombre: Optional[str] = Query(None),
+    codigo: Optional[str] = Query(None),
+    tipo: Optional[str] = Query(None),
+    active: Optional[bool] = Query(None),
+):
+    instrumentos = obtener_instrumentos(id=id, nombre=nombre, codigo=codigo, tipo=tipo, active=active)
+    return [InstrumentoOut.model_validate(i) for i in instrumentos]
+
+
+@app.get("/api/instrumento/{id}", response_model=InstrumentoOut, tags=["Inversiones"])
+def get_instrumento(id: UUID):
+    instrumento = obtener_instrumento_por_id(id)
+    if not instrumento:
+        raise HTTPException(status_code=404, detail="Instrumento no encontrado")
+    return InstrumentoOut.model_validate(instrumento)
+
+
+@app.post("/api/instrumento", response_model=InstrumentoOut, tags=["Inversiones"])
+def crear_instrumento_endpoint(instr: InstrumentoCrear):
+    instrumento = crear_instrumento(instr)
+    return InstrumentoOut.model_validate(instrumento)
+
+
+@app.put("/api/instrumento/{id}", response_model=InstrumentoOut, tags=["Inversiones"])
+def actualizar_instrumento_endpoint(id: UUID, instrumento: InstrumentoOut):
+    if str(instrumento.id).lower() != str(id).lower():
+        raise HTTPException(status_code=400, detail=f"ID mismatch: path ID is {id}, but body ID is {instrumento.id}")
+    ins = actualizar_instrumento(id, instrumento_update=instrumento)
+    return InstrumentoOut.model_validate(ins)
+
+
+@app.delete("/api/instrumento/{id}", status_code=status.HTTP_204_NO_CONTENT, tags=["Inversiones"])
+def eliminar_instrumento(id: UUID):
+    instrumento = obtener_instrumento_por_id(id)
+    if not instrumento:
+        raise HTTPException(status_code=404, detail="Instrumento no encontrado")
+    # soft-delete
+    instrumento.active = False
+    actualizar_instrumento(id, instrumento_update=InstrumentoOut.model_validate(instrumento))
+
+
+@app.post("/api/precio", response_model=PrecioOut, tags=["Inversiones"])
+def crear_precio_endpoint(precio: PrecioCrear):
+    p = crear_precio(precio)
+    return PrecioOut.model_validate(p)
+
+
+@app.get("/api/precios", response_model=list[PrecioOut], tags=["Inversiones"])
+def get_precios(
+    id: Optional[UUID] = Query(None),
+    instrumento_id: Optional[UUID] = Query(None),
+    desde_fecha: Optional[datetime] = Query(None),
+    hasta_fecha: Optional[datetime] = Query(None),
+    active: Optional[bool] = Query(None),
+    page_size: Optional[int] = Query(None),
+    page_number: Optional[int] = Query(None),
+):
+    precios = obtener_precios(id=id, instrumento_id=instrumento_id, desde_fecha=desde_fecha, hasta_fecha=hasta_fecha, active=active, page_size=page_size, page_number=page_number)
+    return [PrecioOut.model_validate(p) for p in precios]
+
+
+@app.post("/api/inversion", response_model=InversionOut, tags=["Inversiones"])
+def crear_inversion_endpoint(inv: InversionCrear):
+    i = crear_inversion(inv)
+    return InversionOut.model_validate(i)
+
+
+@app.get("/api/inversiones", response_model=list[InversionOut], tags=["Inversiones"])
+def get_inversiones(
+    id: Optional[UUID] = Query(None),
+    precio_id: Optional[UUID] = Query(None),
+    ultima: Optional[bool] = Query(None),
+    active: Optional[bool] = Query(None),
+    page_size: Optional[int] = Query(None),
+    page_number: Optional[int] = Query(None),
+):
+    inversiones = obtener_inversiones(id=id, precio_id=precio_id, ultima=ultima, active=active, page_size=page_size, page_number=page_number)
+    return [InversionOut.model_validate(inv) for inv in inversiones]
+
+
+@app.get("/api/inversiones/meta", tags=["Inversiones"])
+def inversiones_meta():
+    """Return allowed enum values for instrumentos: tipo, clase_renta, moneda"""
+    return {
+        "tipo": instrumento_tipo_values(),
+        "clase_renta": clase_renta_values(),
+        "moneda": moneda_values(),
+    }
+
 
 # Drive endpoints
 

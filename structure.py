@@ -84,3 +84,57 @@ class Vencimiento(Base):
     fechaConfirmada: Mapped[Optional[bool]] = mapped_column("fechaconfirmada", Boolean, default=False, nullable=True)
     pagoId: Mapped[Optional[str]] = mapped_column('pago', ForeignKey("misgestiones.finanzas_movimientogasto.id"), nullable=True)
     pago: Mapped[Optional[MovimientoGasto]] = relationship()
+
+
+class Instrumento(Base):
+    __tablename__ = "instrumento"
+    __table_args__ = { 'schema': 'inversiones'}
+
+    id: Mapped[str] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    nombre: Mapped[str] = mapped_column(String(256))
+    codigo: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    tipo: Mapped[str] = mapped_column(String(30))
+    clase_renta: Mapped[str] = mapped_column("clase_renta", String(10))
+    broker: Mapped[Optional[str]] = mapped_column(String(256), nullable=True)
+    moneda: Mapped[str] = mapped_column(String(10))
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[Optional[datetime]] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime, default=datetime.utcnow)
+
+    precios: Mapped[list['Precio']] = relationship(back_populates='instrumento', cascade='all, delete-orphan')
+
+    def __repr__(self) -> str:
+        return f'Instrumento(id={self.id}, nombre={self.nombre}, codigo={self.codigo})'
+
+
+class Precio(Base):
+    __tablename__ = "precio"
+    __table_args__ = { 'schema': 'inversiones'}
+
+    id: Mapped[str] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
+    monto: Mapped[float] = mapped_column()
+    fecha: Mapped[Optional[datetime]] = mapped_column(DateTime)
+    instrumentoId: Mapped[str] = mapped_column('instrumento_id', ForeignKey("inversiones.instrumento.id"))
+    instrumento: Mapped[Instrumento] = relationship(back_populates='precios')
+    created_at: Mapped[Optional[datetime]] = mapped_column(DateTime, default=datetime.utcnow)
+
+    def __repr__(self) -> str:
+        return f'Precio(id={self.id}, monto={self.monto}, fecha={self.fecha})'
+
+
+class Inversion(Base):
+    __tablename__ = "inversion"
+    __table_args__ = { 'schema': 'inversiones'}
+
+    id: Mapped[str] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
+    ultima: Mapped[bool] = mapped_column(Boolean, default=False)
+    cantidad: Mapped[float] = mapped_column()
+    precioId: Mapped[str] = mapped_column('precio_id', ForeignKey("inversiones.precio.id"))
+    precio: Mapped[Precio] = relationship()
+    created_at: Mapped[Optional[datetime]] = mapped_column(DateTime, default=datetime.utcnow)
+
+    def __repr__(self) -> str:
+        return f'Inversion(id={self.id}, cantidad={self.cantidad}, ultima={self.ultima})'
+
