@@ -9,8 +9,8 @@ class InstrumentoTipo(str, Enum):
     ACCION_INTERNACIONAL = "ACCION_INTERNACIONAL"
     BONO = "BONO"
     FCI_EXTERIOR = "FCI_EXTERIOR"
-    ETF = "ETF"
-
+    ETF = "ETF",
+    CRIPTO = "CRIPTO",
 
 class ClaseRenta(str, Enum):
     FIJA = "FIJA"
