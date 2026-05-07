@@ -55,18 +55,6 @@ app.add_middleware( CORSMiddleware,
     expose_headers=["Content-Disposition"],
 )
 
-# Allow embedding the FastAPI docs in the admin app by adjusting frame-related headers
-@app.middleware("http")
-async def allow_iframe_docs(request, call_next):
-    response = await call_next(request)
-    # Only modify the docs endpoint responses
-    if request.url.path.startswith("/docs"):
-        # Remove X-Frame-Options if present (some platforms set it by default)
-        response.headers.pop("x-frame-options", None)
-        # Allow framing from the admin site(s) and localhost for development
-        response.headers["Content-Security-Policy"] = "frame-ancestors 'self' https://mis-gestiones-admin.vercel.app https://mis-gestiones-opal-kappa.vercel.app http://localhost:5173;"
-    return response
-
 
 @app.post("/api/movimientos-gasto",  response_model=models.MovimientoGastoSearchResults, tags=["Movimiento Gasto"])
 def buscar_movimientos_gasto(params: models.MovimientoGastoQueryParams):
