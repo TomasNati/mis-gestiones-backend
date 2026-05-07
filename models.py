@@ -301,7 +301,6 @@ class InstrumentoCrear(BaseModel):
     codigo: Optional[str] = None
     tipo: InstrumentoTipo
     clase_renta: ClaseRenta
-    broker: Optional[str] = None
     moneda: Moneda
 
     class Config:
@@ -343,6 +342,7 @@ class InversionCrear(BaseModel):
     cantidad: float
     precio_id: uuid.UUID
     ultima: Optional[bool] = False
+    broker: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -354,6 +354,7 @@ class InversionOut(BaseModel):
     ultima: bool
     cantidad: float
     precio: PrecioOut
+    broker: Optional[str] = None
     created_at: Optional[datetime.datetime] = None
 
     class Config:

@@ -357,7 +357,6 @@ def crear_instrumento(instr: models.InstrumentoCrear) -> Instrumento:
             codigo=instr.codigo,
             tipo=tipo_val,
             clase_renta=clase_val,
-            broker=instr.broker,
             moneda=moneda_val
         )
         session.add(instrumento)
@@ -404,7 +403,6 @@ def actualizar_instrumento(id: UUID, instrumento_update: models.InstrumentoOut) 
             # Accept Enum or raw string
             ins.tipo = instrumento_update.tipo.value if hasattr(instrumento_update.tipo, 'value') else instrumento_update.tipo
             ins.clase_renta = instrumento_update.clase_renta.value if hasattr(instrumento_update.clase_renta, 'value') else instrumento_update.clase_renta
-            ins.broker = instrumento_update.broker
             ins.moneda = instrumento_update.moneda.value if hasattr(instrumento_update.moneda, 'value') else instrumento_update.moneda
             ins.active = instrumento_update.active
             session.commit()
@@ -449,7 +447,7 @@ def obtener_precios(
 
 def crear_inversion(inv: models.InversionCrear) -> Inversion:
     with Session(database.engine) as session:
-        inversion = Inversion(cantidad=inv.cantidad, precioId=inv.precio_id, ultima=inv.ultima)
+        inversion = Inversion(cantidad=inv.cantidad, precioId=inv.precio_id, ultima=inv.ultima, broker=inv.broker)
         session.add(inversion)
         session.commit()
         session.refresh(inversion)

@@ -20,7 +20,7 @@ from db import (
 from structure import CategoriaDeletionError, SubcategoriaDeletionError
 import db
 from models import CategoriaOut, CategoriasCrear, SubcategoriaOut, CategoriaBasicOut, InstrumentoCrear, InstrumentoOut, PrecioCrear, PrecioOut, InversionCrear, InversionOut
-from enums import instrumento_tipo_values, clase_renta_values, moneda_values
+from enums import broker_values, instrumento_tipo_values, clase_renta_values, moneda_values
 import models
 import os
 import hmac
@@ -275,11 +275,12 @@ def get_inversiones(
 
 @app.get("/api/inversiones/meta", tags=["Inversiones"])
 def inversiones_meta():
-    """Return allowed enum values for instrumentos: tipo, clase_renta, moneda"""
+    """Return allowed enum values for instrumentos: tipo, clase_renta, moneda, brokers"""
     return {
         "tipo": instrumento_tipo_values(),
         "clase_renta": clase_renta_values(),
         "moneda": moneda_values(),
+        "brokers": broker_values(),
     }
 
 

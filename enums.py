@@ -23,6 +23,9 @@ class Moneda(str, Enum):
     DOLAR = "DOLAR"
     DOLAR_CCL = "DOLAR_CCL"
 
+class Broker(str, Enum):
+    PPI= "PPI",
+    BALANZ = "BALANZ",
 
 # Utility to export values (useful for future endpoints)
 def instrumento_tipo_values():
@@ -35,3 +38,6 @@ def clase_renta_values():
 
 def moneda_values():
     return [e.value for e in Moneda]
+
+def broker_values():    
+    return [e.value for e in Broker]
