@@ -8,3 +8,6 @@ google-auth
 python-multipart
 httpx
 yfinance
+requests
+pandas
+openpyxl

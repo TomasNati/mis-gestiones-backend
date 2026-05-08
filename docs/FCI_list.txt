@@ -2,3 +2,11 @@ Del excel
 fila inicial: 12
 filtrar por nombre usando columna A: remover acentos, todo lowercase
 precio: columna F
+
+
+Entidad Fondo
+nombre: A string
+moneda: B string 
+precio_actual: F (float)
+codigo_cnv: S number
+codigo_cafci: U number

@@ -2,6 +2,7 @@ from typing import Optional, Union
 from uuid import UUID
 from datetime import datetime, timedelta
 from fastapi import FastAPI, HTTPException, Query, status, Header, Depends
+from fastapi.concurrency import asynccontextmanager
 from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from db import (
@@ -17,6 +18,7 @@ from db import (
     crear_inversion,
     obtener_inversiones,
 )
+from services.cafci import download_cafci_to_memory, get_cafci_data_list, normalize_string
 from services.yahoo_service import get_current_price_value
 from structure import CategoriaDeletionError, SubcategoriaDeletionError
 import db
@@ -36,10 +38,36 @@ import drive
 from services import get_exchange_service, get_crypto_service, get_instrumento_service, get_fci_service
 
 
+# Cotizaciones2 JSON cache (24 hours)
+_COT2_CACHE = None
+_COT2_LIST_CACHE_DURATION = timedelta(hours=24)
+
+        # Global variable to simulate a cache for now
+FONDOS_CACHE = []
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # --- Startup Logic ---
+    print("🚀 Initializing CAFCI data...")
+    download = download_cafci_to_memory()
+    if download["success"]:
+        global FONDOS_CACHE
+        FONDOS_CACHE = get_cafci_data_list(download["file"])
+        print(f"✅ Loaded {len(FONDOS_CACHE)} funds into memory.")
+    else:
+        print(f"❌ Failed to load CAFCI data: {download['message']}")
+    
+    yield  # The app stays "alive" here
+    
+    # --- Shutdown Logic ---
+    print("🛑 Cleaning up resources...")
+    FONDOS_CACHE.clear()
+
 app = FastAPI(
     title="Vercel + FastAPI",
     description="Vercel + FastAPI",
     version="1.0.0",
+    lifespan=lifespan
 )
 
 origins = [
@@ -56,10 +84,6 @@ app.add_middleware( CORSMiddleware,
     allow_headers=["*"],
     expose_headers=["Content-Disposition"],
 )
-
-# Cotizaciones2 JSON cache (24 hours)
-_COT2_CACHE = None
-_COT2_LIST_CACHE_DURATION = timedelta(hours=24)
 
 
 @app.post("/api/movimientos-gasto",  response_model=models.MovimientoGastoSearchResults, tags=["Movimiento Gasto"])
@@ -647,6 +671,28 @@ async def get_top_cryptos(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error fetching top cryptos: {str(e)}")
 
+@app.get("/api/cotizaciones/fondos", tags=["Cotizaciones"])
+async def search_fondos(
+    names: Optional[str] = Query(None, description="Comma-separated keywords"),
+    codigo_cnv: Optional[int] = None,
+    codigo_cafci: Optional[int] = None
+):
+    results = FONDOS_CACHE
+
+    if names:
+        keywords = [normalize_string(k.strip()) for k in names.split(",") if k.strip()]
+        results = [
+            f for f in results 
+            if all(kw in normalize_string(f["nombre"]) for kw in keywords)
+        ]
+
+    if codigo_cnv is not None:
+        results = [f for f in results if f["codigo_cnv"] == codigo_cnv]
+
+    if codigo_cafci is not None:
+        results = [f for f in results if f["codigo_cafci"] == codigo_cafci]
+
+    return results
 
 @app.get("/", response_class=HTMLResponse)
 def read_root():
