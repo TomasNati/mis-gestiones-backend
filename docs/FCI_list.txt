@@ -1,11 +1,4 @@
-Create a new category of endpoints, Cotizaciones2
-There, allow searching FCI by name, similar to /api/cotizaciones/fci/search, same parameters, but:
-
-a. To get the list of all Fci names, do the following:
- 1. Call first  https://estadisticas.cafci.org.ar/consulta-de-fondos.json
- 2. The resulting json is in Response.json
- 3. For each fci in fondos, and for each item in clases array, return
-   fondo.id, fondo.codigo_cnv, fondo.nombre
-   fondo.moneda,
-   clase.id as clase_id,
-   clase.nombre as clase_nombre,
+Del excel
+fila inicial: 12
+filtrar por nombre usando columna A: remover acentos, todo lowercase
+precio: columna F

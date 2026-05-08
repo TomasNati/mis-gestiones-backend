@@ -17,6 +17,7 @@ from db import (
     crear_inversion,
     obtener_inversiones,
 )
+from services.yahoo_service import get_current_price_value
 from structure import CategoriaDeletionError, SubcategoriaDeletionError
 import db
 from models import CategoriaOut, CategoriasCrear, SubcategoriaOut, CategoriaBasicOut, InstrumentoCrear, InstrumentoOut, PrecioCrear, PrecioOut, InversionCrear, InversionOut
@@ -563,6 +564,21 @@ async def cotizaciones2_search_fcis(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error processing FCI estadisticas: {str(e)}")
 
+
+@app.get("/cotizaciones/us/{symbol}", tags=["Cotizaciones"])
+async def yahoo_price(symbol: str):
+    """
+    Endpoint to fetch the current price of a stock or ETF using yfinance.
+    """
+    price = get_current_price_value(symbol)
+    
+    if price is None:
+        raise HTTPException(status_code=404, detail=f"Symbol '{symbol}' not found or no data available.")
+    
+    return {
+        "symbol": symbol.upper(),
+        "price": price
+    }
 
 @app.get("/api/cotizaciones/dolar", response_model=list[models.DolarOut], tags=["Cotizaciones"])
 async def get_all_dolar_rates():
