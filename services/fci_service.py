@@ -1,6 +1,9 @@
 import httpx
+import logging
 from typing import Any, Dict, List, Optional
 from datetime import datetime, timedelta
+
+logger = logging.getLogger("services.fci_service")
 
 
 class InvalidFilterError(ValueError):
@@ -74,7 +77,7 @@ class FCIService:
             return "ARS"
         return cls.MONEDA_MAP.get(str(moneda_id), str(moneda_id))
 
-    async def get_quote(self, fondo_id: str, clase_id: str) -> Dict[str, Any]:
+    async def get_quote(self, fondo_id: str, clase_id: str, log: bool = False) -> Dict[str, Any]:
         """
         Fetch the latest FCI quote.
 
@@ -83,6 +86,7 @@ class FCIService:
                       `.../fondo/<fondo_id>/clase/<clase_id>/ficha` (e.g. '739').
             clase_id: clase_fondo id, the second number in the same URL
                       (e.g. '1611').
+            log: if True, log internal HTTP calls, inputs and results.
 
         Returns:
             Dict with fondo_id, clase_id, nombre, moneda, fecha, vcp_unitario,
@@ -98,14 +102,22 @@ class FCIService:
         cache_key = f"fci_{fondo_id_v}_{clase_id_v}"
         cached = self._get_cached(cache_key)
         if cached:
+            if log:
+                logger.info(f"FCI get_quote cache hit for {fondo_id_v}/{clase_id_v}")
             return cached
 
         ficha_url = self.FICHA_URL.format(fondo_id=fondo_id_v, clase_id=clase_id_v)
         api_url = self.API_URL.format(fondo_id=fondo_id_v, clase_id=clase_id_v)
 
+        if log:
+            logger.info(f"FCI get_quote inputs: fondo_id={fondo_id_v}, clase_id={clase_id_v}")
+            logger.info(f"FCI get_quote will call ficha_url={ficha_url} and api_url={api_url}")
+
         try:
             async with httpx.AsyncClient(follow_redirects=True, timeout=15.0) as client:
                 ficha_resp = await client.get(ficha_url, headers=self.HEADERS)
+                if log:
+                    logger.info(f"HTTP GET {ficha_url} -> status={ficha_resp.status_code}, bytes={len(ficha_resp.content) if ficha_resp.content is not None else 0}")
                 if ficha_resp.status_code >= 400:
                     raise ValueError(
                         f"CAFCI ficha page returned status {ficha_resp.status_code} "
@@ -114,7 +126,10 @@ class FCIService:
 
                 api_headers = {**self.HEADERS, "Accept": "application/json", "Referer": ficha_url}
                 api_resp = await client.get(api_url, headers=api_headers)
+                if log:
+                    logger.info(f"HTTP GET {api_url} -> status={api_resp.status_code}, bytes={len(api_resp.content) if api_resp.content is not None else 0}")
         except httpx.RequestError as e:
+            logger.exception("FCI get_quote network error")
             raise ConnectionError(
                 f"Error reaching CAFCI for fondo_id={fondo_id_v} clase_id={clase_id_v}: {str(e)}"
             )
@@ -164,25 +179,33 @@ class FCIService:
             "url": ficha_url,
             "fecha_consulta": datetime.now().isoformat(timespec="seconds"),
         }
+        if log:
+            logger.info(f"FCI get_quote result for {fondo_id_v}/{clase_id_v}: vcp_unitario={vcp_unitario}, fecha={result.get('fecha')}")
         self._set_cache(cache_key, result)
         return result
 
-    async def list_all(self, clear_cache: bool = False) -> List[Dict[str, Any]]:
+    async def list_all(self, clear_cache: bool = False, log: bool = False) -> List[Dict[str, Any]]:
         """
         Fetch the full FCI catalog from CAFCI.
 
         Cached for 24 hours; pass clear_cache=True to force a refresh.
+        If log=True, only log the number of entities returned (do not log full payload).
         """
         if not clear_cache and self._list_cache is not None:
             ts, data = self._list_cache
             if datetime.now() - ts < self.LIST_CACHE_DURATION:
+                if log:
+                    logger.info(f"FCI list_all cache hit -> {len(data)} entities")
                 return data
 
         headers = {**self.HEADERS, "Accept": "application/json"}
         try:
             async with httpx.AsyncClient(follow_redirects=True, timeout=60.0) as client:
                 resp = await client.get(self.LIST_URL, headers=headers)
+                if log:
+                    logger.info(f"HTTP GET LIST_URL -> status={resp.status_code}, bytes={len(resp.content) if resp.content is not None else 0}")
         except httpx.RequestError as e:
+            logger.exception("FCI list_all network error")
             raise ConnectionError(f"Error reaching CAFCI fondo list: {str(e)}")
 
         if resp.status_code >= 400:
@@ -198,6 +221,8 @@ class FCIService:
 
         data = payload.get("data") or []
         self._list_cache = (datetime.now(), data)
+        if log:
+            logger.info(f"FCI list_all returned {len(data)} entities")
         return data
 
     @staticmethod
@@ -249,6 +274,7 @@ class FCIService:
         codigo_cnv: Optional[str] = None,
         nombre: Optional[str] = None,
         clear_cache: bool = False,
+        log: bool = False,
     ) -> List[Dict[str, Any]]:
         """
         Search the CAFCI catalog by `codigoCNV` and/or `nombre`.
@@ -280,9 +306,11 @@ class FCIService:
         if not clear_cache:
             cached = self._get_cached(cache_key)
             if cached is not None:
+                if log:
+                    logger.info(f"FCI search cache hit for key={cache_key} -> {len(cached)} results")
                 return cached
 
-        catalog = await self.list_all(clear_cache=clear_cache)
+        catalog = await self.list_all(clear_cache=clear_cache, log=log)
 
         matches: List[Dict[str, Any]] = []
         for entity in catalog:
@@ -304,6 +332,7 @@ class FCIService:
         nombre: Optional[str] = None,
         fondo_id: Optional[str] = None,
         clear_cache: bool = False,
+        log: bool = False,
     ) -> List[Dict[str, Any]]:
         """
         Search clase_fondos across the entire CAFCI catalog.
@@ -336,9 +365,11 @@ class FCIService:
         if not clear_cache:
             cached = self._get_cached(cache_key)
             if cached is not None:
+                if log:
+                    logger.info(f"FCI search_clase_fondos cache hit for key={cache_key} -> {len(cached)} results")
                 return cached
 
-        catalog = await self.list_all(clear_cache=clear_cache)
+        catalog = await self.list_all(clear_cache=clear_cache, log=log)
 
         matches: List[Dict[str, Any]] = []
         for fondo in catalog:

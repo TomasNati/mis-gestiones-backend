@@ -257,6 +257,27 @@ class ClaseFondoSearchOut(BaseModel):
         from_attributes = True
 
 
+class FCINameEntryOut(BaseModel):
+    """Single entry returned by the Cotizaciones2 FCI name list (one per clase)."""
+    fondo_id: str
+    codigo_cnv: Optional[str] = None
+    fondo_nombre: Optional[str] = None
+    fondo_moneda: Optional[str] = None
+    clase_id: str
+    clase_nombre: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+class FCINamesOut(BaseModel):
+    """Wrapper for a list of FCI name entries returned by Cotizaciones2."""
+    fcis: list[FCINameEntryOut]
+
+    class Config:
+        from_attributes = True
+
+
 class FCIQuoteOut(BaseModel):
     """FCI (mutual fund) quote response (fetched from CAFCI public ficha)"""
     fondo_id: str

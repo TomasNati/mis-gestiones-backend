@@ -1,6 +1,6 @@
 from typing import Optional, Union
 from uuid import UUID
-from datetime import datetime
+from datetime import datetime, timedelta
 from fastapi import FastAPI, HTTPException, Query, status, Header, Depends
 from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -27,6 +27,7 @@ import hmac
 
 from urllib.parse import quote
 import logging
+import httpx
 from dotenv import load_dotenv
 load_dotenv()
 logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO"))
@@ -54,6 +55,10 @@ app.add_middleware( CORSMiddleware,
     allow_headers=["*"],
     expose_headers=["Content-Disposition"],
 )
+
+# Cotizaciones2 JSON cache (24 hours)
+_COT2_CACHE = None
+_COT2_LIST_CACHE_DURATION = timedelta(hours=24)
 
 
 @app.post("/api/movimientos-gasto",  response_model=models.MovimientoGastoSearchResults, tags=["Movimiento Gasto"])
@@ -381,6 +386,7 @@ async def search_clase_fondos(
     nombre: Optional[str] = Query(None, description="Optional comma-separated keywords. Each must appear in the clase_fondo's `nombre` (case-insensitive)."),
     fondoId: Optional[str] = Query(None, description="Optional parent fondo id (matches `clase_fondo.fondoId`)."),
     clear_cache: bool = Query(False, description="If true, refresh the CAFCI catalog cache (24h) and this search's result cache before searching."),
+    log: bool = Query(False, description="If true, log internal HTTP calls and inputs/outputs."),
 ):
     """
     Search clase_fondos across the CAFCI catalog by `id`, `nombre`, and/or `fondoId`.
@@ -396,7 +402,7 @@ async def search_clase_fondos(
     try:
         fci_service = get_fci_service()
         results = await fci_service.search_clase_fondos(
-            id=id, nombre=nombre, fondo_id=fondoId, clear_cache=clear_cache
+            id=id, nombre=nombre, fondo_id=fondoId, clear_cache=clear_cache, log=log
         )
         return {"clase_fondos": results}
     except InvalidFilterError as e:
@@ -414,6 +420,7 @@ async def search_fcis(
     codigo_cnv: Optional[str] = Query(None, description="Optional exact CNV code."),
     nombre: Optional[str] = Query(None, description="Optional comma-separated keywords. Each must appear in the fund's `nombre` (case-insensitive)."),
     clear_cache: bool = Query(False, description="If true, refresh the CAFCI catalog cache (24h) and this search's result cache before searching."),
+    log: bool = Query(False, description="If true, log internal HTTP calls and inputs/outputs."),
 ):
     """
     Search the CAFCI catalog by `codigoCNV` and/or `nombre`.
@@ -430,7 +437,7 @@ async def search_fcis(
     try:
         fci_service = get_fci_service()
         results = await fci_service.search(
-            codigo_cnv=codigo_cnv, nombre=nombre, clear_cache=clear_cache
+            codigo_cnv=codigo_cnv, nombre=nombre, clear_cache=clear_cache, log=log
         )
         return {"fcis": results}
     except InvalidFilterError as e:
@@ -444,7 +451,7 @@ async def search_fcis(
 
 
 @app.get("/api/cotizaciones/fci/{fondo_id}/{clase_id}", response_model=models.FCIQuoteOut, tags=["Cotizaciones"])
-async def get_fci_quote(fondo_id: str, clase_id: str):
+async def get_fci_quote(fondo_id: str, clase_id: str, log: bool = Query(False, description="If true, log internal HTTP calls and inputs/outputs.")):
     """
     Get the latest quote for a mutual fund (FCI) from CAFCI.
 
@@ -458,13 +465,103 @@ async def get_fci_quote(fondo_id: str, clase_id: str):
     """
     try:
         fci_service = get_fci_service()
-        return await fci_service.get_quote(fondo_id, clase_id)
+        return await fci_service.get_quote(fondo_id, clase_id, log=log)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except ConnectionError as e:
         raise HTTPException(status_code=503, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error fetching FCI quote: {str(e)}")
+
+
+@app.get("/api/cotizaciones2/fci/search", response_model=models.FCINamesOut, tags=["Cotizaciones2"])
+async def cotizaciones2_search_fcis(
+    codigo_cnv: Optional[str] = Query(None, description="Optional exact CNV code."),
+    nombre: Optional[str] = Query(None, description="Optional comma-separated keywords. Each must appear in the fondo's or clase's `nombre` (case-insensitive)."),
+    clear_cache: bool = Query(False, description="If true, refresh the 24h cached estadisticas JSON."),
+    log: bool = Query(False, description="If true, log HTTP call info and counts."),
+):
+    """
+    Search and return FCI names+classes using the CAFCI estadisticas JSON.
+
+    Requires at least one of codigo_cnv or nombre (same validation as existing search).
+    """
+    if not codigo_cnv and not nombre:
+        raise HTTPException(status_code=400, detail="at least one of codigo_cnv or nombre must be provided")
+
+    try:
+        # try to use cached fondos list
+        global _COT2_CACHE
+        fondos = None
+        if not clear_cache and _COT2_CACHE is not None:
+            ts, cached_fondos = _COT2_CACHE
+            if datetime.now() - ts < _COT2_LIST_CACHE_DURATION:
+                fondos = cached_fondos
+                if log:
+                    logging.getLogger(__name__).info(f"Cotizaciones2 cache hit -> {len(fondos)} fondos")
+
+        if fondos is None:
+            url = "https://estadisticas.cafci.org.ar/consulta-de-fondos.json"
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                resp = await client.get(url)
+                if log:
+                    logging.getLogger(__name__).info(f"GET {url} -> status={resp.status_code}, bytes={len(resp.content) if resp.content is not None else 0}")
+            if resp.status_code >= 400:
+                raise HTTPException(status_code=503, detail=f"Error fetching CAFCI estadisticas: status {resp.status_code}")
+
+            resp_json = resp.json()
+            data = resp_json.get("Response", {}).get("json", resp_json)
+            fondos = data.get("fondos", []) or []
+            _COT2_CACHE = (datetime.now(), fondos)
+
+        results = []
+        keywords = [kw.strip().lower() for kw in (nombre or "").split(",") if kw.strip()]
+
+        for fondo in fondos:
+            fondo_id = fondo.get("id")
+            codigo = fondo.get("codigo_cnv") or fondo.get("codigoCNV") or fondo.get("codigoCnv")
+            fondo_nombre = (fondo.get("nombre") or "")
+            moneda_obj = fondo.get("moneda")
+            if isinstance(moneda_obj, dict):
+                moneda = moneda_obj.get("nombre") or str(moneda_obj.get("id", ""))
+            elif moneda_obj is None:
+                moneda = None
+            else:
+                moneda = str(moneda_obj)
+            clases = fondo.get("clases") or []
+
+            # If codigo_cnv provided and doesn't match, skip entire fondo
+            if codigo_cnv and (codigo is None or str(codigo).strip() != codigo_cnv.strip()):
+                continue
+
+            for clase in clases:
+                clase_id = clase.get("id")
+                clase_nombre = (clase.get("nombre") or "")
+
+                # keyword matching: match if ALL keywords appear in fondo.nombre OR in clase.nombre
+                if keywords:
+                    match_fondo = fondo_nombre and all(k in fondo_nombre.lower() for k in keywords)
+                    match_clase = clase_nombre and all(k in clase_nombre.lower() for k in keywords)
+                    if not (match_fondo or match_clase):
+                        continue
+
+                results.append({
+                    "fondo_id": str(fondo_id) if fondo_id is not None else "",
+                    "codigo_cnv": codigo,
+                    "fondo_nombre": fondo.get("nombre"),
+                    "fondo_moneda": moneda,
+                    "clase_id": str(clase_id) if clase_id is not None else "",
+                    "clase_nombre": clase.get("nombre"),
+                })
+
+        if log:
+            logging.getLogger(__name__).info(f"Cotizaciones2 returned {len(results)} entries")
+
+        return {"fcis": results}
+    except httpx.RequestError as e:
+        raise HTTPException(status_code=503, detail=f"Error fetching CAFCI estadisticas: {str(e)}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error processing FCI estadisticas: {str(e)}")
 
 
 @app.get("/api/cotizaciones/dolar", response_model=list[models.DolarOut], tags=["Cotizaciones"])
