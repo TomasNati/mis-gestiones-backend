@@ -1,8 +1,7 @@
 from typing import Optional, Union
 from uuid import UUID
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from fastapi import FastAPI, HTTPException, Query, status, Header, Depends
-from fastapi.concurrency import asynccontextmanager
 from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from db import (
@@ -32,42 +31,49 @@ from urllib.parse import quote
 import logging
 import httpx
 from dotenv import load_dotenv
-load_dotenv()
-logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO"))
 import drive
 from services import get_exchange_service, get_crypto_service, get_instrumento_service, get_fci_service
+
+load_dotenv()
+logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO"))
 
 
 # Cotizaciones2 JSON cache (24 hours)
 _COT2_CACHE = None
 _COT2_LIST_CACHE_DURATION = timedelta(hours=24)
 
-        # Global variable to simulate a cache for now
-FONDOS_CACHE = []
+_FONDOS_CACHE = {
+    "data": [],
+    "last_updated": None
+}
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    # --- Startup Logic ---
-    print("🚀 Initializing CAFCI data...")
+def load_data_into_cache():
+    """Helper to encapsulate the download and storage logic"""
+    print("🚀 Fetching/Refreshing CAFCI data...")
     download = download_cafci_to_memory()
+    
     if download["success"]:
-        global FONDOS_CACHE
-        FONDOS_CACHE = get_cafci_data_list(download["file"])
-        print(f"✅ Loaded {len(FONDOS_CACHE)} funds into memory.")
+        global _FONDOS_CACHE
+        _FONDOS_CACHE["data"] = get_cafci_data_list(download["file"])
+        _FONDOS_CACHE["last_updated"] = date.today()
+        print(f"✅ Loaded {len(_FONDOS_CACHE['data'])} funds into memory.")
     else:
         print(f"❌ Failed to load CAFCI data: {download['message']}")
+
+def get_fondos():
+    """Access point for the data that checks for expiration"""
+    today = date.today()
     
-    yield  # The app stays "alive" here
-    
-    # --- Shutdown Logic ---
-    print("🛑 Cleaning up resources...")
-    FONDOS_CACHE.clear()
+    # If cache is empty OR the date is from a previous day, refresh it
+    if not _FONDOS_CACHE["last_updated"] or _FONDOS_CACHE["last_updated"] < today:
+        load_data_into_cache()
+        
+    return _FONDOS_CACHE["data"]
 
 app = FastAPI(
     title="Vercel + FastAPI",
     description="Vercel + FastAPI",
-    version="1.0.0",
-    lifespan=lifespan
+    version="1.0.0"
 )
 
 origins = [
@@ -677,7 +683,7 @@ async def search_fondos(
     codigo_cnv: Optional[int] = None,
     codigo_cafci: Optional[int] = None
 ):
-    results = FONDOS_CACHE
+    results = get_fondos()
 
     if names:
         keywords = [normalize_string(k.strip()) for k in names.split(",") if k.strip()]
