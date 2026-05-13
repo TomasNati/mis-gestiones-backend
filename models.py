@@ -333,6 +333,7 @@ class InstrumentoOut(InstrumentoCrear):
     active: bool
     created_at: Optional[datetime.datetime] = None
     updated_at: Optional[datetime.datetime] = None
+    precios: list['PrecioOut'] = []
 
     class Config:
         from_attributes = True
@@ -377,6 +378,14 @@ class InversionOut(BaseModel):
     precio: PrecioOut
     broker: Optional[str] = None
     created_at: Optional[datetime.datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
+class InstrumentosSearchOut(BaseModel):
+    """Wrapper for list of instrumentos with their latest prices"""
+    instrumentos: list[InstrumentoOut]
 
     class Config:
         from_attributes = True

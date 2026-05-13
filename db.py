@@ -475,3 +475,60 @@ def obtener_inversiones(
         result = session.execute(query)
         inversiones = result.scalars().all()
         return inversiones
+
+
+def obtener_instrumentos_con_precios(
+        id: Optional[UUID] = None,
+        nombre: Optional[str] = None,
+        codigo: Optional[str] = None,
+        tipo: Optional[str] = None,
+        active: Optional[bool] = None,
+        limit_precios: int = 50
+) -> Sequence[Instrumento]:
+    """
+    Fetch instrumentos with their latest N prices (default 50).
+    Uses a ROW_NUMBER() window function so the DB returns at most
+    `limit_precios` per instrumento, ordered by fecha DESC.
+    """
+    with Session(database.engine) as session:
+        query = select(Instrumento)
+        if id is not None: query = query.where(Instrumento.id == id)
+        if nombre is not None: query = query.where(Instrumento.nombre.ilike(f"%{nombre}%"))
+        if codigo is not None: query = query.where(Instrumento.codigo.ilike(f"%{codigo}%"))
+        if tipo is not None: query = query.where(Instrumento.tipo == tipo)
+        if active is not None: query = query.where(Instrumento.active == active)
+
+        instrumentos = session.execute(query).scalars().all()
+
+        if not instrumentos:
+            return instrumentos
+
+        instrumento_ids = [i.id for i in instrumentos]
+
+        rn = func.row_number().over(
+            partition_by=Precio.instrumentoId,
+            order_by=desc(Precio.fecha)
+        ).label('rn')
+
+        ranked = (
+            select(Precio.id, rn)
+            .where(Precio.instrumentoId.in_(instrumento_ids))
+            .where(Precio.active == True)
+            .subquery()
+        )
+
+        precios = session.execute(
+            select(Precio)
+            .join(ranked, Precio.id == ranked.c.id)
+            .where(ranked.c.rn <= limit_precios)
+            .order_by(Precio.instrumentoId, desc(Precio.fecha))
+        ).scalars().all()
+
+        precios_map: dict[str, list] = {}
+        for p in precios:
+            precios_map.setdefault(str(p.instrumentoId), []).append(p)
+
+        for instrumento in instrumentos:
+            instrumento.precios = precios_map.get(str(instrumento.id), [])
+
+        return instrumentos
