@@ -412,10 +412,35 @@ def actualizar_instrumento(id: UUID, instrumento_update: models.InstrumentoOut) 
 
 def crear_precio(precio: models.PrecioCrear) -> Precio:
     with Session(database.engine) as session:
+        existing = session.execute(
+            select(Precio).where(
+                Precio.instrumentoId == precio.instrumento_id,
+                func.date(Precio.fecha) == func.date(precio.fecha)
+            )
+        ).scalar_one_or_none()
+        if existing:
+            existing.monto = precio.monto
+            existing.fecha = precio.fecha
+            session.commit()
+            session.refresh(existing)
+            return existing
         p = Precio(monto=precio.monto, fecha=precio.fecha, instrumentoId=precio.instrumento_id)
         session.add(p)
         session.commit()
         session.refresh(p)
+        return p
+
+
+def actualizar_precio(id: UUID, precio_update: models.PrecioOut) -> Precio:
+    with Session(database.engine) as session:
+        p = session.get(Precio, id)
+        if p:
+            p.monto = precio_update.monto
+            p.fecha = precio_update.fecha
+            p.instrumentoId = precio_update.instrumentoId
+            p.active = precio_update.active
+            session.commit()
+            session.refresh(p)
         return p
 
 
