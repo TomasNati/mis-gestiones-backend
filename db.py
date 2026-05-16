@@ -421,6 +421,7 @@ def crear_precio(precio: models.PrecioCrear) -> Precio:
         if existing:
             existing.monto = precio.monto
             existing.fecha = precio.fecha
+            existing.active = True
             session.commit()
             session.refresh(existing)
             return existing
