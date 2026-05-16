@@ -4,7 +4,17 @@ from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Query, status
 
-from db import actualizar_instrumento, actualizar_precio, crear_instrumento, crear_inversion, crear_precio, obtener_instrumento_por_id, obtener_instrumentos, obtener_inversiones, obtener_precios
+from db import (
+    actualizar_instrumento, 
+    actualizar_precio, 
+    crear_instrumento, 
+    crear_inversion,
+    crear_precio, 
+    obtener_instrumento_por_id, 
+    obtener_inversiones, 
+    obtener_precios, 
+    obtener_instrumentos_con_precios
+)
 from enums import broker_values, clase_renta_values, instrumento_tipo_values, moneda_values
 from models import InstrumentoCrear, InstrumentoOut, InversionCrear, InversionOut, PrecioCrear, PrecioOut
 
@@ -19,8 +29,20 @@ def get_instrumentos(
     codigo: Optional[str] = Query(None),
     tipo: Optional[str] = Query(None),
     active: Optional[bool] = Query(None),
+    limit_precios: int = Query(50, description="Maximum number of latest prices to include per instrumento"),
 ):
-    instrumentos = obtener_instrumentos(id=id, nombre=nombre, codigo=codigo, tipo=tipo, active=active)
+    """
+    Get instrumentos with their latest N prices (default 50).
+    Prices are ordered by fecha DESC (most recent first).
+    """
+    instrumentos = obtener_instrumentos_con_precios(
+        id=id,
+        nombre=nombre,
+        codigo=codigo,
+        tipo=tipo,
+        active=active,
+        limit_precios=limit_precios
+    )
     return [InstrumentoOut.model_validate(i) for i in instrumentos]
 
 

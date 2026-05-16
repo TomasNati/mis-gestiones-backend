@@ -333,6 +333,7 @@ class InstrumentoOut(InstrumentoCrear):
     active: bool
     created_at: Optional[datetime.datetime] = None
     updated_at: Optional[datetime.datetime] = None
+    precios: list['PrecioSimple'] = []
 
     class Config:
         from_attributes = True
@@ -359,6 +360,15 @@ class PrecioOut(BaseModel):
         from_attributes = True
 
 
+class PrecioSimple(BaseModel):
+    id: uuid.UUID
+    fecha: datetime.datetime
+    monto: float
+
+    class Config:
+        from_attributes = True
+
+
 class InversionCrear(BaseModel):
     cantidad: float
     precio_id: uuid.UUID
@@ -377,6 +387,14 @@ class InversionOut(BaseModel):
     precio: PrecioOut
     broker: Optional[str] = None
     created_at: Optional[datetime.datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
+class InstrumentosSearchOut(BaseModel):
+    """Wrapper for list of instrumentos with their latest prices"""
+    instrumentos: list[InstrumentoOut]
 
     class Config:
         from_attributes = True
