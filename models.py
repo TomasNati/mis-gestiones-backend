@@ -369,11 +369,23 @@ class PrecioSimple(BaseModel):
         from_attributes = True
 
 
+class InstrumentoSimple(BaseModel):
+    id: uuid.UUID
+    nombre: str
+    codigo: Optional[str] = None
+    tipo: str
+    clase_renta: str
+    moneda: str
+
+    class Config:
+        from_attributes = True
+
+
 class InversionCrear(BaseModel):
     cantidad: float
-    precio_id: uuid.UUID
-    ultima: Optional[bool] = False
+    instrumento_id: uuid.UUID
     broker: Optional[str] = None
+    fecha: Optional[datetime.datetime] = None
 
     class Config:
         from_attributes = True
@@ -382,10 +394,10 @@ class InversionCrear(BaseModel):
 class InversionOut(BaseModel):
     id: uuid.UUID
     active: bool
-    ultima: bool
     cantidad: float
-    precio: PrecioOut
+    instrumento: InstrumentoSimple
     broker: Optional[str] = None
+    fecha: Optional[datetime.datetime] = None
     created_at: Optional[datetime.datetime] = None
 
     class Config:

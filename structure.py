@@ -129,13 +129,13 @@ class Inversion(Base):
 
     id: Mapped[str] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     active: Mapped[bool] = mapped_column(Boolean, default=True)
-    ultima: Mapped[bool] = mapped_column(Boolean, default=False)
     cantidad: Mapped[float] = mapped_column()
-    precioId: Mapped[str] = mapped_column('precio_id', ForeignKey("inversiones.precio.id"))
-    precio: Mapped[Precio] = relationship()
+    instrumentoId: Mapped[str] = mapped_column('instrumento_id', ForeignKey("inversiones.instrumento.id"))
+    instrumento: Mapped[Instrumento] = relationship()
     broker: Mapped[Optional[str]] = mapped_column(String(256), nullable=True)
+    fecha: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[Optional[datetime]] = mapped_column(DateTime, default=datetime.utcnow)
 
     def __repr__(self) -> str:
-        return f'Inversion(id={self.id}, cantidad={self.cantidad}, ultima={self.ultima})'
+        return f'Inversion(id={self.id}, cantidad={self.cantidad})'
 

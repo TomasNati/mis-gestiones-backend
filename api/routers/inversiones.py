@@ -126,13 +126,12 @@ def crear_inversion_endpoint(inv: InversionCrear):
 @router.get("/inversiones", response_model=list[InversionOut], tags=["Inversiones"])
 def get_inversiones(
     id: Optional[UUID] = Query(None),
-    precio_id: Optional[UUID] = Query(None),
-    ultima: Optional[bool] = Query(None),
+    instrumento_id: Optional[UUID] = Query(None),
     active: Optional[bool] = Query(None),
     page_size: Optional[int] = Query(None),
     page_number: Optional[int] = Query(None),
 ):
-    inversiones = obtener_inversiones(id=id, precio_id=precio_id, ultima=ultima, active=active, page_size=page_size, page_number=page_number)
+    inversiones = obtener_inversiones(id=id, instrumento_id=instrumento_id, active=active, page_size=page_size, page_number=page_number)
     return [InversionOut.model_validate(inv) for inv in inversiones]
 
 

@@ -473,7 +473,7 @@ def obtener_precios(
 
 def crear_inversion(inv: models.InversionCrear) -> Inversion:
     with Session(database.engine) as session:
-        inversion = Inversion(cantidad=inv.cantidad, precioId=inv.precio_id, ultima=inv.ultima, broker=inv.broker)
+        inversion = Inversion(cantidad=inv.cantidad, instrumentoId=inv.instrumento_id, broker=inv.broker, fecha=inv.fecha)
         session.add(inversion)
         session.commit()
         session.refresh(inversion)
@@ -482,17 +482,15 @@ def crear_inversion(inv: models.InversionCrear) -> Inversion:
 
 def obtener_inversiones(
         id: Optional[UUID] = None,
-        precio_id: Optional[UUID] = None,
-        ultima: Optional[bool] = None,
+        instrumento_id: Optional[UUID] = None,
         active: Optional[bool] = None,
         page_size: Optional[int] = None,
         page_number: Optional[int] = None
 ) -> Sequence[Inversion]:
     with Session(database.engine) as session:
-        query = select(Inversion).options(selectinload(Inversion.precio).selectinload(Precio.instrumento))
+        query = select(Inversion).options(selectinload(Inversion.instrumento))
         if id is not None: query = query.where(Inversion.id == id)
-        if precio_id is not None: query = query.where(Inversion.precioId == precio_id)
-        if ultima is not None: query = query.where(Inversion.ultima == ultima)
+        if instrumento_id is not None: query = query.where(Inversion.instrumentoId == instrumento_id)
         if active is not None: query = query.where(Inversion.active == active)
 
         if page_size is not None and page_number is not None:
