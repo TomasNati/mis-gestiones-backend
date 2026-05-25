@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Header, Query
 from fastapi.responses import StreamingResponse
 
 import drive
-import models
+import models.drive as drive
 
 
 router = APIRouter(prefix="/api/drive", tags=["Drive"])
@@ -20,7 +20,7 @@ def require_api_key(x_api_key: str = Header(...)) -> None:
         raise HTTPException(status_code=401, detail={"error": "Unauthorized", "message": "invalid or missing X-API-Key"})
 
 
-@router.get("/api/drive/files", response_model=models.DriveFileListOut, tags=["Drive"], dependencies=[Depends(require_api_key)])
+@router.get("/api/drive/files", response_model=drive.DriveFileListOut, tags=["Drive"], dependencies=[Depends(require_api_key)])
 async def list_drive_files(
     path: Optional[str] = Query(None),
     name: Optional[str] = Query(None),
@@ -53,7 +53,7 @@ async def list_drive_files(
         if folder_id is None:
             return {"files": []}
     files = drive.list_files(name_query=name, folder_id=folder_id, created_from=created_from, created_to=created_to)
-    return {"files": [models.DriveFileOut.model_validate(f) for f in files]}
+    return {"files": [drive.DriveFileOut.model_validate(f) for f in files]}
 
 
 @router.get("/api/drive/files/{file_id}/download", tags=["Drive"])

@@ -2,9 +2,9 @@ from datetime import datetime
 from typing import Optional
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, status
 
-from db import (
+from db.inversiones import (
     actualizar_instrumento, 
     actualizar_precio, 
     crear_instrumento, 
@@ -16,33 +16,26 @@ from db import (
     obtener_instrumentos_con_precios
 )
 from enums import broker_values, clase_renta_values, instrumento_tipo_values, moneda_values
-from models import InstrumentoCrear, InstrumentoOut, InversionCrear, InversionOut, PrecioCrear, PrecioOut
+from models.drive import InstrumentoCrear, InstrumentoOut, InversionCrear, InversionOut, PrecioCrear, PrecioOut
+from models.inversiones import (
+    ActualizarInstrumentoEndpointParams,
+    ActualizarPrecioEndpointParams,
+    GetInstrumentosParams,
+    GetInversionesParams,
+    GetPreciosParams,
+)
 
 
 router = APIRouter(prefix="/api/inversiones", tags=["Inversiones"])
 
 
 @router.get("/instrumentos", response_model=list[InstrumentoOut], tags=["Inversiones"])
-def get_instrumentos(
-    id: Optional[UUID] = Query(None),
-    nombre: Optional[str] = Query(None),
-    codigo: Optional[str] = Query(None),
-    tipo: Optional[str] = Query(None),
-    active: Optional[bool] = Query(None),
-    limit_precios: int = Query(50, description="Maximum number of latest prices to include per instrumento"),
-):
+def get_instrumentos(params: GetInstrumentosParams = Depends()):
     """
     Get instrumentos with their latest N prices (default 50).
     Prices are ordered by fecha DESC (most recent first).
     """
-    instrumentos = obtener_instrumentos_con_precios(
-        id=id,
-        nombre=nombre,
-        codigo=codigo,
-        tipo=tipo,
-        active=active,
-        limit_precios=limit_precios
-    )
+    instrumentos = obtener_instrumentos_con_precios(**params.model_dump())
     return [InstrumentoOut.model_validate(i) for i in instrumentos]
 
 
@@ -62,9 +55,10 @@ def crear_instrumento_endpoint(instr: InstrumentoCrear):
 
 @router.put("/instrumento/{id}", response_model=InstrumentoOut, tags=["Inversiones"])
 def actualizar_instrumento_endpoint(id: UUID, instrumento: InstrumentoOut):
-    if str(instrumento.id).lower() != str(id).lower():
-        raise HTTPException(status_code=400, detail=f"ID mismatch: path ID is {id}, but body ID is {instrumento.id}")
-    ins = actualizar_instrumento(id, instrumento_update=instrumento)
+    params = ActualizarInstrumentoEndpointParams(id=id, instrumento=instrumento)
+    if str(params.instrumento.id).lower() != str(params.id).lower():
+        raise HTTPException(status_code=400, detail=f"ID mismatch: path ID is {params.id}, but body ID is {params.instrumento.id}")
+    ins = actualizar_instrumento(params.id, instrumento_update=params.instrumento)
     return InstrumentoOut.model_validate(ins)
 
 
@@ -86,10 +80,11 @@ def crear_precio_endpoint(precio: PrecioCrear):
 
 @router.put("/precio/{id}", response_model=PrecioOut, tags=["Inversiones"])
 def actualizar_precio_endpoint(id: UUID, precio: PrecioOut):
-    if str(precio.id).lower() != str(id).lower():
+    params = ActualizarPrecioEndpointParams(id=id, precio=precio)
+    if str(params.precio.id).lower() != str(params.id).lower():
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"ID mismatch: path ID is {id}, but body ID is {precio.id}")
-    p = actualizar_precio(id, precio_update=precio)
+            detail=f"ID mismatch: path ID is {params.id}, but body ID is {params.precio.id}")
+    p = actualizar_precio(params.id, precio_update=params.precio)
     return PrecioOut.model_validate(p)
 
 
@@ -104,16 +99,8 @@ def eliminar_precio(id: UUID):
 
 
 @router.get("/precios", response_model=list[PrecioOut], tags=["Inversiones"])
-def get_precios(
-    id: Optional[UUID] = Query(None),
-    instrumento_id: Optional[UUID] = Query(None),
-    desde_fecha: Optional[datetime] = Query(None),
-    hasta_fecha: Optional[datetime] = Query(None),
-    active: Optional[bool] = Query(None),
-    page_size: Optional[int] = Query(None),
-    page_number: Optional[int] = Query(None),
-):
-    precios = obtener_precios(id=id, instrumento_id=instrumento_id, desde_fecha=desde_fecha, hasta_fecha=hasta_fecha, active=active, page_size=page_size, page_number=page_number)
+def get_precios(params: GetPreciosParams = Depends()):
+    precios = obtener_precios(**params.model_dump())
     return [PrecioOut.model_validate(p) for p in precios]
 
 
@@ -123,15 +110,9 @@ def crear_inversion_endpoint(inv: InversionCrear):
     return InversionOut.model_validate(i)
 
 
-@router.get("/inversiones", response_model=list[InversionOut], tags=["Inversiones"])
-def get_inversiones(
-    id: Optional[UUID] = Query(None),
-    instrumento_id: Optional[UUID] = Query(None),
-    active: Optional[bool] = Query(None),
-    page_size: Optional[int] = Query(None),
-    page_number: Optional[int] = Query(None),
-):
-    inversiones = obtener_inversiones(id=id, instrumento_id=instrumento_id, active=active, page_size=page_size, page_number=page_number)
+@router.post("/inversiones", response_model=list[InversionOut], tags=["Inversiones"])
+def get_inversiones(params: GetInversionesParams):
+    inversiones = obtener_inversiones(**params.model_dump())
     return [InversionOut.model_validate(inv) for inv in inversiones]
 
 

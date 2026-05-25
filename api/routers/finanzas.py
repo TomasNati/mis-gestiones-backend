@@ -2,12 +2,22 @@ from typing import Optional, Union
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Query, status
-from models import CategoriaOut, CategoriasCrear, SubcategoriaOut, CategoriaBasicOut
+from models.gestiones import (
+    CategoriaOut, 
+    CategoriasCrear,
+    MovimientoGastoQueryParams,
+    MovimientoGastoSearchResults,
+    SubcategoriaBasicOut,
+    SubcategoriaCrear, 
+    SubcategoriaOut, 
+    CategoriaBasicOut,
+    VencimientoQueryParams,
+    VencimientoSearchResults
+)
 
-import db
-import models
+import db.db as db
 
-from db import (
+from db.gestiones import (
     obtener_categoria_por_id,
     obtener_categorias,
     obtener_subcategorias,
@@ -17,8 +27,8 @@ from structure import CategoriaDeletionError, SubcategoriaDeletionError
 router = APIRouter()
 
 
-@router.post("/api/movimientos-gasto",  response_model=models.MovimientoGastoSearchResults, tags=["Movimiento Gasto"])
-def buscar_movimientos_gasto(params: models.MovimientoGastoQueryParams):
+@router.post("/api/movimientos-gasto",  response_model=MovimientoGastoSearchResults, tags=["Movimiento Gasto"])
+def buscar_movimientos_gasto(params: MovimientoGastoQueryParams):
     movimientos = db.obtener_movimientos_gasto(
         id=params.id,
         categoriaIds=params.categoriaIds,
@@ -38,8 +48,8 @@ def buscar_movimientos_gasto(params: models.MovimientoGastoQueryParams):
     )
     return movimientos
 
-@router.post("/api/vencimientos", response_model=models.VencimientoSearchResults, tags=["Vencimientos"])
-def buscar_vencimientos(params: models.VencimientoQueryParams):
+@router.post("/api/vencimientos", response_model=VencimientoSearchResults, tags=["Vencimientos"])
+def buscar_vencimientos(params: VencimientoQueryParams):
     if not params.model_fields_set:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -65,7 +75,7 @@ def buscar_vencimientos(params: models.VencimientoQueryParams):
     )
     return vencimientos
 
-@router.get("/api/categorias", response_model=list[models.CategoriaOut], tags=["Categoría"])
+@router.get("/api/categorias", response_model=list[CategoriaOut], tags=["Categoría"])
 def get_categorias(
     id: Optional[UUID] = Query(None), 
     nombre: Optional[str] = Query(None),
@@ -113,23 +123,23 @@ def eliminar_categoria(id: UUID, eliminar_subcategorias: Optional[bool] = Query(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 
-@router.post("/api/subcategoria", response_model=models.SubcategoriaBasicOut, tags=["Subcategoría"])
-def crear_subcategoria(subcategoria: models.SubcategoriaCrear):
+@router.post("/api/subcategoria", response_model=SubcategoriaBasicOut, tags=["Subcategoría"])
+def crear_subcategoria(subcategoria: SubcategoriaCrear):
     subcategoria = db.crear_subcategoria(subcategoria=subcategoria)
-    return models.SubcategoriaBasicOut.model_validate(subcategoria)
+    return SubcategoriaBasicOut.model_validate(subcategoria)
 
-@router.put("/api/subcategoria", response_model=models.SubcategoriaBasicOut, tags=["Subcategoría"])
-def actualizar_subcategoria(subcategoria: models.SubcategoriaBasicOut):
+@router.put("/api/subcategoria", response_model=SubcategoriaBasicOut, tags=["Subcategoría"])
+def actualizar_subcategoria(subcategoria: SubcategoriaBasicOut):
     subcategoria = db.actualizar_subcategoria(subcategoria=subcategoria)
-    return models.SubcategoriaBasicOut.model_validate(subcategoria)
+    return SubcategoriaBasicOut.model_validate(subcategoria)
 
-@router.get("/api/subcategoria/{id}", response_model=models.SubcategoriaOut, tags=["Subcategoría"])
+@router.get("/api/subcategoria/{id}", response_model=SubcategoriaOut, tags=["Subcategoría"])
 def get_subcategoria(id: UUID):
     subcategoria = db.obtener_subcategoria_por_id(id)
     if not subcategoria:
         raise HTTPException(status_code=404, detail="Subcategoria no encontrada")
 
-    return models.SubcategoriaOut.model_validate(subcategoria)
+    return SubcategoriaOut.model_validate(subcategoria)
 
 @router.get("/api/subcategorias", response_model=list[SubcategoriaOut], tags=["Subcategoría"])
 def get_subcategorias(

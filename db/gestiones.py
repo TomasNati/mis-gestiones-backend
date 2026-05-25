@@ -1,10 +1,13 @@
-from datetime import datetime
-from dotenv import load_dotenv
-import os
-from sqlalchemy import create_engine, func, select, asc, desc
-from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.orm import Session, selectinload, with_loader_criteria
 from typing import Optional, Sequence
+from sqlalchemy.dialects.postgresql import UUID
+from models import drive
+from models.gestiones import (
+    CategoriaBasicOut, 
+    MovimientoGastoSearchResults, 
+    SubcategoriaCrear, 
+    SubcategoriaOut, 
+    VencimientoSearchResults
+)
 from structure import (
     Categoria,
     Subcategoria,
@@ -12,23 +15,13 @@ from structure import (
     SubcategoriaDeletionError,
     MovimientoGasto,
     DetalleSubcategoria,
-    Vencimiento,
-    Instrumento,
-    Precio,
-    Inversion
+    Vencimiento
 )
+from sqlalchemy.orm import Session, selectinload, with_loader_criteria
+from db.db import database
+from sqlalchemy import func, select, asc, desc
+from datetime import datetime
 import uuid
-import models
-
-load_dotenv()
-
-class Database():
-
-    def __init__(self):
-        DATABASE_URL = os.getenv("DATABASE_URL")
-        self.engine = create_engine(DATABASE_URL)
-
-database = Database()
 
 def obtener_categorias(
         id: Optional[UUID] = None,
@@ -71,7 +64,7 @@ def obtener_movimientos_gasto(
         page_number: Optional[int] = 1,
         sort_by: Optional[str] = "fecha",
         sort_direction: Optional[str] = "desc"
-) -> models.MovimientoGastoSearchResults:
+) -> MovimientoGastoSearchResults:
     with Session(database.engine) as session:
         query = (
             select(MovimientoGasto)
@@ -127,7 +120,7 @@ def obtener_movimientos_gasto(
         result = session.execute(query)
         movimientos = result.scalars().all()
 
-    return models.MovimientoGastoSearchResults(
+    return MovimientoGastoSearchResults(
         total=total,
         page_number=page_number,
         page_size=page_size,
@@ -151,7 +144,7 @@ def obtener_vencimientos(
         page_number: Optional[int] = 1,
         sort_by: Optional[str] = "fecha",
         sort_direction: Optional[str] = "asc"
-) -> models.VencimientoSearchResults:
+) -> VencimientoSearchResults:
     with Session(database.engine) as session:
         query = (
             select(Vencimiento)
@@ -208,7 +201,7 @@ def obtener_vencimientos(
         result = session.execute(query)
         vencimientos = result.scalars().all()
 
-    return models.VencimientoSearchResults(
+    return VencimientoSearchResults(
         total=total,
         page_number=page_number,
         page_size=page_size,
@@ -229,7 +222,7 @@ def obtener_categoria_por_id(id: UUID, incluir_subcategorias: bool = False):
 
     return categoria
 
-def actualizar_categoria(id: UUID, categoria_update: models.CategoriaBasicOut) -> Categoria:
+def actualizar_categoria(id: UUID, categoria_update: CategoriaBasicOut) -> Categoria:
     with Session(database.engine) as session:
         categoria = session.get(Categoria, id)
         if categoria:
@@ -273,7 +266,7 @@ def eliminar_categoria(id: uuid.UUID, eliminar_subcategorias: bool = False ):
         categoria.active = False
         session.commit()
 
-def crear_subcategoria(subcategoria: models.SubcategoriaCrear) -> Subcategoria:
+def crear_subcategoria(subcategoria: SubcategoriaCrear) -> Subcategoria:
     with Session(database.engine) as session:
         subcategoria = Subcategoria(
             nombre=subcategoria.nombre, 
@@ -284,7 +277,7 @@ def crear_subcategoria(subcategoria: models.SubcategoriaCrear) -> Subcategoria:
         session.refresh(subcategoria)
         return subcategoria
 
-def actualizar_subcategoria(subcategoria: models.SubcategoriaOut) -> Subcategoria:
+def actualizar_subcategoria(subcategoria: SubcategoriaOut) -> Subcategoria:
     with Session(database.engine) as session:
         subcategoriaDB = session.get(Subcategoria, subcategoria.id)
         if subcategoriaDB:
@@ -339,220 +332,3 @@ def eliminar_subcategoria(id: uuid.UUID):
         subcategoria.active = False
         session.commit()
 
-
-# ---------------------- INVERSIONES DB HELPERS ------------------------------
-
-from enums import InstrumentoTipo, ClaseRenta, Moneda
-
-
-def crear_instrumento(instr: models.InstrumentoCrear) -> Instrumento:
-    with Session(database.engine) as session:
-        # Ensure enum values are stored as strings in DB
-        tipo_val = instr.tipo.value if hasattr(instr.tipo, 'value') else instr.tipo
-        clase_val = instr.clase_renta.value if hasattr(instr.clase_renta, 'value') else instr.clase_renta
-        moneda_val = instr.moneda.value if hasattr(instr.moneda, 'value') else instr.moneda
-
-        instrumento = Instrumento(
-            nombre=instr.nombre,
-            codigo=instr.codigo,
-            tipo=tipo_val,
-            clase_renta=clase_val,
-            moneda=moneda_val
-        )
-        session.add(instrumento)
-        session.commit()
-        session.refresh(instrumento)
-        return instrumento
-
-
-def obtener_instrumentos(
-        id: Optional[UUID] = None,
-        nombre: Optional[str] = None,
-        codigo: Optional[str] = None,
-        tipo: Optional[str] = None,
-        active: Optional[bool] = None
-) -> Sequence[Instrumento]:
-    with Session(database.engine) as session:
-        query = select(Instrumento)
-        if id is not None: query = query.where(Instrumento.id == id)
-        if nombre is not None: query = query.where(Instrumento.nombre.ilike(f"%{nombre}%"))
-        if codigo is not None: query = query.where(Instrumento.codigo.ilike(f"%{codigo}%"))
-        if tipo is not None: query = query.where(Instrumento.tipo == tipo)
-        if active is not None: query = query.where(Instrumento.active == active)
-
-        result = session.execute(query)
-        instrumentos = result.scalars().all()
-
-    return instrumentos
-
-
-def obtener_instrumento_por_id(id: UUID) -> Instrumento:
-    with Session(database.engine) as session:
-        query = select(Instrumento).where(Instrumento.id == id).options(selectinload(Instrumento.precios))
-        result = session.execute(query)
-        instrumento = result.scalars().first()
-        return instrumento
-
-
-def actualizar_instrumento(id: UUID, instrumento_update: models.InstrumentoOut) -> Instrumento:
-    with Session(database.engine) as session:
-        ins = session.get(Instrumento, id)
-        if ins:
-            ins.nombre = instrumento_update.nombre
-            ins.codigo = instrumento_update.codigo
-            # Accept Enum or raw string
-            ins.tipo = instrumento_update.tipo.value if hasattr(instrumento_update.tipo, 'value') else instrumento_update.tipo
-            ins.clase_renta = instrumento_update.clase_renta.value if hasattr(instrumento_update.clase_renta, 'value') else instrumento_update.clase_renta
-            ins.moneda = instrumento_update.moneda.value if hasattr(instrumento_update.moneda, 'value') else instrumento_update.moneda
-            ins.active = instrumento_update.active
-            session.commit()
-            session.refresh(ins)
-        return ins
-
-
-def crear_precio(precio: models.PrecioCrear) -> Precio:
-    with Session(database.engine) as session:
-        existing = session.execute(
-            select(Precio).where(
-                Precio.instrumentoId == precio.instrumento_id,
-                func.date(Precio.fecha) == func.date(precio.fecha)
-            )
-        ).scalar_one_or_none()
-        if existing:
-            existing.monto = precio.monto
-            existing.fecha = precio.fecha
-            existing.active = True
-            session.commit()
-            session.refresh(existing)
-            return existing
-        p = Precio(monto=precio.monto, fecha=precio.fecha, instrumentoId=precio.instrumento_id)
-        session.add(p)
-        session.commit()
-        session.refresh(p)
-        return p
-
-
-def actualizar_precio(id: UUID, precio_update: models.PrecioOut) -> Precio:
-    with Session(database.engine) as session:
-        p = session.get(Precio, id)
-        if p:
-            p.monto = precio_update.monto
-            p.fecha = precio_update.fecha
-            p.instrumentoId = precio_update.instrumentoId
-            p.active = precio_update.active
-            session.commit()
-            session.refresh(p)
-        return p
-
-
-def obtener_precios(
-        id: Optional[UUID] = None,
-        instrumento_id: Optional[UUID] = None,
-        desde_fecha: Optional[datetime] = None,
-        hasta_fecha: Optional[datetime] = None,
-        active: Optional[bool] = None,
-        page_size: Optional[int] = None,
-        page_number: Optional[int] = None
-) -> Sequence[Precio]:
-    with Session(database.engine) as session:
-        query = select(Precio).options(selectinload(Precio.instrumento))
-        if id is not None: query = query.where(Precio.id == id)
-        if instrumento_id is not None: query = query.where(Precio.instrumentoId == instrumento_id)
-        if desde_fecha is not None: query = query.where(Precio.fecha >= desde_fecha)
-        if hasta_fecha is not None: query = query.where(Precio.fecha <= hasta_fecha)
-        if active is not None: query = query.where(Precio.active == active)
-
-        # pagination
-        if page_size is not None and page_number is not None:
-            query = query.limit(page_size).offset(page_size * (page_number - 1))
-
-        result = session.execute(query)
-        precios = result.scalars().all()
-        return precios
-
-
-def crear_inversion(inv: models.InversionCrear) -> Inversion:
-    with Session(database.engine) as session:
-        inversion = Inversion(cantidad=inv.cantidad, instrumentoId=inv.instrumento_id, broker=inv.broker, fecha=inv.fecha)
-        session.add(inversion)
-        session.commit()
-        session.refresh(inversion)
-        return inversion
-
-
-def obtener_inversiones(
-        id: Optional[UUID] = None,
-        instrumento_id: Optional[UUID] = None,
-        active: Optional[bool] = None,
-        page_size: Optional[int] = None,
-        page_number: Optional[int] = None
-) -> Sequence[Inversion]:
-    with Session(database.engine) as session:
-        query = select(Inversion).options(selectinload(Inversion.instrumento))
-        if id is not None: query = query.where(Inversion.id == id)
-        if instrumento_id is not None: query = query.where(Inversion.instrumentoId == instrumento_id)
-        if active is not None: query = query.where(Inversion.active == active)
-
-        if page_size is not None and page_number is not None:
-            query = query.limit(page_size).offset(page_size * (page_number - 1))
-
-        result = session.execute(query)
-        inversiones = result.scalars().all()
-        return inversiones
-
-
-def obtener_instrumentos_con_precios(
-        id: Optional[UUID] = None,
-        nombre: Optional[str] = None,
-        codigo: Optional[str] = None,
-        tipo: Optional[str] = None,
-        active: Optional[bool] = None,
-        limit_precios: int = 50
-) -> Sequence[Instrumento]:
-    """
-    Fetch instrumentos with their latest N prices (default 50).
-    Uses a ROW_NUMBER() window function so the DB returns at most
-    `limit_precios` per instrumento, ordered by fecha DESC.
-    """
-    with Session(database.engine) as session:
-        query = select(Instrumento)
-        if id is not None: query = query.where(Instrumento.id == id)
-        if nombre is not None: query = query.where(Instrumento.nombre.ilike(f"%{nombre}%"))
-        if codigo is not None: query = query.where(Instrumento.codigo.ilike(f"%{codigo}%"))
-        if tipo is not None: query = query.where(Instrumento.tipo == tipo)
-        if active is not None: query = query.where(Instrumento.active == active)
-
-        instrumentos = session.execute(query).scalars().all()
-
-        if not instrumentos:
-            return instrumentos
-
-        instrumento_ids = [i.id for i in instrumentos]
-
-        rn = func.row_number().over(
-            partition_by=Precio.instrumentoId,
-            order_by=desc(Precio.fecha)
-        ).label('rn')
-
-        ranked = (
-            select(Precio.id, rn)
-            .where(Precio.instrumentoId.in_(instrumento_ids))
-            .where(Precio.active == True)
-            .subquery()
-        )
-
-        precios = session.execute(
-            select(Precio)
-            .join(ranked, Precio.id == ranked.c.id)
-            .where(ranked.c.rn <= limit_precios)
-            .order_by(Precio.instrumentoId, desc(Precio.fecha))
-        ).scalars().all()
-
-        precios_map: dict[str, list] = {}
-        for p in precios:
-            precios_map.setdefault(str(p.instrumentoId), []).append(p)
-
-        for instrumento in instrumentos:
-            instrumento.precios = precios_map.get(str(instrumento.id), [])
-
-        return instrumentos
