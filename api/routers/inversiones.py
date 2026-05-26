@@ -1,5 +1,3 @@
-from datetime import datetime
-from typing import Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -125,4 +123,3 @@ def inversiones_meta():
         "moneda": moneda_values(),
         "brokers": broker_values(),
     }
-
