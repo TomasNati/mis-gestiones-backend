@@ -29,8 +29,8 @@ from models.inversiones import (
 router = APIRouter(prefix="/api/inversiones", tags=["Inversiones"])
 
 
-@router.get("/instrumentos", response_model=list[InstrumentoOut], tags=["Inversiones"])
-def get_instrumentos(params: GetInstrumentosParams = Depends()):
+@router.post("/instrumentos", response_model=list[InstrumentoOut], tags=["Inversiones"])
+def get_instrumentos(params: GetInstrumentosParams):
     """
     Get instrumentos with their latest N prices (default 50).
     Prices are ordered by fecha DESC (most recent first).
@@ -98,8 +98,8 @@ def eliminar_precio(id: UUID):
     actualizar_precio(id, precio_update=PrecioOut.model_validate(precio))
 
 
-@router.get("/precios", response_model=list[PrecioOut], tags=["Inversiones"])
-def get_precios(params: GetPreciosParams = Depends()):
+@router.post("/precios", response_model=list[PrecioOut], tags=["Inversiones"])
+def get_precios(params: GetPreciosParams):
     precios = obtener_precios(**params.model_dump())
     return [PrecioOut.model_validate(p) for p in precios]
 

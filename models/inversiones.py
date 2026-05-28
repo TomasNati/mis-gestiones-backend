@@ -12,7 +12,7 @@ class GetInstrumentosParams(BaseModel):
     nombre: Optional[str] = None
     codigo: Optional[str] = None
     tipo: Optional[str] = None
-    active: Optional[bool] = None
+    active: Optional[bool] = True
     limit_precios: int = Field(50, description="Maximum number of latest prices to include per instrumento")
 
 
