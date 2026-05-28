@@ -1,5 +1,5 @@
 from typing import Optional, Sequence
-from sqlalchemy.dialects.postgresql import UUID
+import uuid
 from structure import (
     Instrumento,
     Precio,
@@ -32,7 +32,7 @@ def crear_instrumento(instr: drive.InstrumentoCrear) -> Instrumento:
         return instrumento
 
 def obtener_instrumentos(
-        id: Optional[UUID] = None,
+        id: Optional[uuid.UUID] = None,
         nombre: Optional[str] = None,
         codigo: Optional[str] = None,
         tipo: Optional[str] = None,
@@ -51,14 +51,14 @@ def obtener_instrumentos(
 
     return instrumentos
 
-def obtener_instrumento_por_id(id: UUID) -> Instrumento:
+def obtener_instrumento_por_id(id: uuid.UUID) -> Instrumento:
     with Session(database.engine) as session:
         query = select(Instrumento).where(Instrumento.id == id).options(selectinload(Instrumento.precios))
         result = session.execute(query)
         instrumento = result.scalars().first()
         return instrumento
 
-def actualizar_instrumento(id: UUID, instrumento_update: drive.InstrumentoOut) -> Instrumento:
+def actualizar_instrumento(id: uuid.UUID, instrumento_update: drive.InstrumentoOut) -> Instrumento:
     with Session(database.engine) as session:
         ins = session.get(Instrumento, id)
         if ins:
@@ -94,7 +94,7 @@ def crear_precio(precio: drive.PrecioCrear) -> Precio:
         session.refresh(p)
         return p
 
-def actualizar_precio(id: UUID, precio_update: drive.PrecioOut) -> Precio:
+def actualizar_precio(id: uuid.UUID, precio_update: drive.PrecioOut) -> Precio:
     with Session(database.engine) as session:
         p = session.get(Precio, id)
         if p:
@@ -107,8 +107,8 @@ def actualizar_precio(id: UUID, precio_update: drive.PrecioOut) -> Precio:
         return p
 
 def obtener_precios(
-        id: Optional[UUID] = None,
-        instrumento_id: Optional[UUID] = None,
+        id: Optional[uuid.UUID] = None,
+        instrumento_id: Optional[uuid.UUID] = None,
         desde_fecha: Optional[datetime] = None,
         hasta_fecha: Optional[datetime] = None,
         active: Optional[bool] = None,
@@ -140,8 +140,8 @@ def crear_inversion(inv: drive.InversionCrear) -> Inversion:
         return inversion
 
 def obtener_inversiones(
-        id: Optional[UUID] = None,
-        instrumento_id: Optional[UUID] = None,
+        id: Optional[uuid.UUID] = None,
+        instrumento_id: Optional[uuid.UUID] = None,
         active: Optional[bool] = None,
         page_size: Optional[int] = None,
         page_number: Optional[int] = None
@@ -160,7 +160,7 @@ def obtener_inversiones(
         return inversiones
 
 def obtener_instrumentos_con_precios(
-        id: Optional[UUID] = None,
+        id: Optional[uuid.UUID] = None,
         nombre: Optional[str] = None,
         codigo: Optional[str] = None,
         tipo: Optional[str] = None,

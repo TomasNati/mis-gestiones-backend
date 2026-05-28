@@ -1,5 +1,4 @@
 from typing import Optional, Sequence
-from sqlalchemy.dialects.postgresql import UUID
 from models import drive
 from models.gestiones import (
     CategoriaBasicOut, 
@@ -24,7 +23,7 @@ from datetime import datetime
 import uuid
 
 def obtener_categorias(
-        id: Optional[UUID] = None,
+        id: Optional[uuid.UUID] = None,
         nombre: Optional[str] = None,
         active: Optional[bool] = None
 ) -> Sequence[Categoria]:
@@ -49,10 +48,10 @@ def obtener_categorias(
     return categorias
 
 def obtener_movimientos_gasto(
-        id: Optional[UUID] = None,
-        categoriaIds: Optional[Sequence[UUID]] = None,
-        subcategoriaIds: Optional[Sequence[UUID]] = None,
-        detalleSubcategoriaIds: Optional[Sequence[UUID]] = None,
+        id: Optional[uuid.UUID] = None,
+        categoriaIds: Optional[Sequence[uuid.UUID]] = None,
+        subcategoriaIds: Optional[Sequence[uuid.UUID]] = None,
+        detalleSubcategoriaIds: Optional[Sequence[uuid.UUID]] = None,
         tiposDePago: Optional[Sequence[str]] = None,
         active: Optional[bool] = None,
         monto_min: Optional[float] = None,
@@ -128,9 +127,9 @@ def obtener_movimientos_gasto(
     )
 
 def obtener_vencimientos(
-        id: Optional[UUID] = None,
-        categoriaIds: Optional[Sequence[UUID]] = None,
-        subcategoriaIds: Optional[Sequence[UUID]] = None,
+        id: Optional[uuid.UUID] = None,
+        categoriaIds: Optional[Sequence[uuid.UUID]] = None,
+        subcategoriaIds: Optional[Sequence[uuid.UUID]] = None,
         esAnual: Optional[bool] = None,
         fechaConfirmada: Optional[bool] = None,
         pagado: Optional[bool] = None,
@@ -208,7 +207,7 @@ def obtener_vencimientos(
         vencimientos=vencimientos
     )
 
-def obtener_categoria_por_id(id: UUID, incluir_subcategorias: bool = False):
+def obtener_categoria_por_id(id: uuid.UUID, incluir_subcategorias: bool = False):
     with Session(database.engine) as session:
         query = (
             select(Categoria)
@@ -222,7 +221,7 @@ def obtener_categoria_por_id(id: UUID, incluir_subcategorias: bool = False):
 
     return categoria
 
-def actualizar_categoria(id: UUID, categoria_update: CategoriaBasicOut) -> Categoria:
+def actualizar_categoria(id: uuid.UUID, categoria_update: CategoriaBasicOut) -> Categoria:
     with Session(database.engine) as session:
         categoria = session.get(Categoria, id)
         if categoria:
@@ -289,7 +288,7 @@ def actualizar_subcategoria(subcategoria: SubcategoriaOut) -> Subcategoria:
             session.refresh(subcategoriaDB)
         return subcategoriaDB
 
-def obtener_subcategoria_por_id(id: UUID) -> Subcategoria:
+def obtener_subcategoria_por_id(id: uuid.UUID) -> Subcategoria:
     with Session(database.engine) as session:
         query = (
             select(Subcategoria)
@@ -303,7 +302,7 @@ def obtener_subcategoria_por_id(id: UUID) -> Subcategoria:
         return subcategoria
 
 def obtener_subcategorias(
-        id: Optional[UUID] = None,
+        id: Optional[uuid.UUID] = None,
         nombre: Optional[str] = None,
         active: Optional[bool] = None
 ) -> Sequence[Subcategoria]:

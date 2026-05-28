@@ -15,7 +15,7 @@ from models.gestiones import (
     VencimientoSearchResults
 )
 
-import db.db as db
+import db.gestiones as db
 
 from db.gestiones import (
     obtener_categoria_por_id,
@@ -158,4 +158,3 @@ def eliminar_subcategoria(id: UUID):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
-

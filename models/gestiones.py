@@ -12,8 +12,8 @@ class MovimientoGastoQueryParams(BaseModel):
     monto_min: Optional[float] = None
     monto_max: Optional[float] = None
     comentarios: Optional[str] = None
-    desde_fecha: Optional[str] = None
-    hasta_fecha: Optional[str] = None
+    desde_fecha: Optional[datetime.datetime] = None
+    hasta_fecha: Optional[datetime.datetime] = None
     active: Optional[bool] = True
     page_size: Optional[int] = 50
     page_number: Optional[int] = 1
@@ -37,9 +37,6 @@ class CategoriaBasicOut(CategoriasCrear):
 class CategoriaOut(CategoriaBasicOut):
     subcategorias: list['SubcategoriaBasicOut']
 
-    class Config:
-        from_attributes = True
-
 class SubcategoriaCrear(CategoriasCrear):
     categoriaId: uuid.UUID
 
@@ -52,9 +49,6 @@ class SubcategoriaBasicOut(SubcategoriaCrear):
 
 class SubcategoriaOut(SubcategoriaBasicOut):
     categoria: CategoriaBasicOut
-
-    class Config:
-        from_attributes = True
 
 class DetalleSubcategoriaBasicOut(BaseModel):
     id: uuid.UUID
