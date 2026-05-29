@@ -139,3 +139,5 @@ class Inversion(Base):
     def __repr__(self) -> str:
         return f'Inversion(id={self.id}, cantidad={self.cantidad})'
 
+class InversionDeletionError(Exception):
+    pass

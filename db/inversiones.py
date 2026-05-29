@@ -2,6 +2,7 @@ from typing import Optional, Sequence
 import uuid
 from structure import (
     Instrumento,
+    InversionDeletionError,
     Precio,
     Inversion
 )
@@ -214,3 +215,12 @@ def obtener_instrumentos_con_precios(
             instrumento.precios = precios_map.get(str(instrumento.id), [])
 
         return instrumentos
+
+def eliminar_inversion(id: uuid.UUID): 
+    with Session(database.engine) as session:
+        inversion = session.get(Inversion, id)
+        if inversion is None:
+            raise InversionDeletionError(f"Inversión with id {id} not found")
+        
+        inversion.active = False
+        session.commit()

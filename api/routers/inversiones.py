@@ -11,8 +11,9 @@ from db.inversiones import (
     obtener_instrumento_por_id, 
     obtener_inversiones, 
     obtener_precios, 
-    obtener_instrumentos_con_precios
+    obtener_instrumentos_con_precios,
 )
+import db.inversiones
 from enums import broker_values, clase_renta_values, instrumento_tipo_values, moneda_values
 from models.drive import InstrumentoCrear, InstrumentoOut, InversionCrear, InversionOut, PrecioCrear, PrecioOut
 from models.inversiones import (
@@ -22,6 +23,7 @@ from models.inversiones import (
     GetInversionesParams,
     GetPreciosParams,
 )
+from structure import InversionDeletionError
 
 
 router = APIRouter(prefix="/api/inversiones", tags=["Inversiones"])
@@ -123,3 +125,12 @@ def inversiones_meta():
         "moneda": moneda_values(),
         "brokers": broker_values(),
     }
+
+@router.delete("/inversion/{id}", status_code=status.HTTP_204_NO_CONTENT, tags=["Inversiones"])
+def eliminar_inversion(id: UUID):
+    try:
+        db.inversiones.eliminar_inversion(id)
+    except InversionDeletionError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
