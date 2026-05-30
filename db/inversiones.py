@@ -137,7 +137,9 @@ def crear_inversion(inv: drive.InversionCrear) -> Inversion:
         inversion = Inversion(cantidad=inv.cantidad, instrumentoId=inv.instrumento_id, broker=inv.broker, fecha=inv.fecha)
         session.add(inversion)
         session.commit()
-        session.refresh(inversion)
+        inversion = session.execute(
+            select(Inversion).options(selectinload(Inversion.instrumento)).where(Inversion.id == inversion.id)
+        ).scalar_one()
         return inversion
 
 def obtener_inversiones(
