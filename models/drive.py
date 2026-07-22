@@ -190,6 +190,13 @@ class InstrumentoOut(InstrumentoCrear):
     active: bool
     created_at: Optional[datetime.datetime] = None
     updated_at: Optional[datetime.datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
+class InstrumentoConPreciosOut(InstrumentoOut):
+    """InstrumentoOut plus its prices — used by read endpoints that load them."""
     precios: list['PrecioSimple'] = []
 
     class Config:
@@ -263,7 +270,7 @@ class InversionOut(BaseModel):
 
 class InstrumentosSearchOut(BaseModel):
     """Wrapper for list of instrumentos with their latest prices"""
-    instrumentos: list[InstrumentoOut]
+    instrumentos: list[InstrumentoConPreciosOut]
 
     class Config:
         from_attributes = True

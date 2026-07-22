@@ -15,7 +15,7 @@ from db.inversiones import (
 )
 import db.inversiones
 from enums import broker_values, clase_renta_values, instrumento_tipo_values, moneda_values
-from models.drive import InstrumentoCrear, InstrumentoOut, InversionCrear, InversionOut, PrecioCrear, PrecioOut
+from models.drive import InstrumentoConPreciosOut, InstrumentoCrear, InstrumentoOut, InversionCrear, InversionOut, PrecioCrear, PrecioOut
 from models.inversiones import (
     ActualizarInstrumentoEndpointParams,
     ActualizarPrecioEndpointParams,
@@ -29,22 +29,22 @@ from structure import InversionDeletionError
 router = APIRouter(prefix="/api/inversiones", tags=["Inversiones"])
 
 
-@router.post("/instrumentos", response_model=list[InstrumentoOut], tags=["Inversiones"])
+@router.post("/instrumentos", response_model=list[InstrumentoConPreciosOut], tags=["Inversiones"])
 def get_instrumentos(params: GetInstrumentosParams):
     """
     Get instrumentos with their latest N prices (default 50).
     Prices are ordered by fecha DESC (most recent first).
     """
     instrumentos = obtener_instrumentos_con_precios(**params.model_dump())
-    return [InstrumentoOut.model_validate(i) for i in instrumentos]
+    return [InstrumentoConPreciosOut.model_validate(i) for i in instrumentos]
 
 
-@router.get("/instrumento/{id}", response_model=InstrumentoOut, tags=["Inversiones"])
+@router.get("/instrumento/{id}", response_model=InstrumentoConPreciosOut, tags=["Inversiones"])
 def get_instrumento(id: UUID):
     instrumento = obtener_instrumento_por_id(id)
     if not instrumento:
         raise HTTPException(status_code=404, detail="Instrumento no encontrado")
-    return InstrumentoOut.model_validate(instrumento)
+    return InstrumentoConPreciosOut.model_validate(instrumento)
 
 
 @router.post("/instrumento", response_model=InstrumentoOut, tags=["Inversiones"])
