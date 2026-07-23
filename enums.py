@@ -26,6 +26,7 @@ class Moneda(str, Enum):
 class Broker(str, Enum):
     PPI= "PPI",
     BALANZ = "BALANZ",
+    NINGUNO = 'NINGUNO'
 
 # Utility to export values (useful for future endpoints)
 def instrumento_tipo_values():
