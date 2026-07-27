@@ -3,14 +3,15 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from db.inversiones import (
-    actualizar_instrumento, 
-    actualizar_precio, 
-    crear_instrumento, 
+    actualizar_instrumento,
+    actualizar_precio,
+    crear_instrumento,
     crear_inversion,
-    crear_precio, 
-    obtener_instrumento_por_id, 
-    obtener_inversiones, 
-    obtener_precios, 
+    crear_precio,
+    guardar_estado_inversiones,
+    obtener_instrumento_por_id,
+    obtener_inversiones,
+    obtener_precios,
     obtener_instrumentos_con_precios,
 )
 import db.inversiones
@@ -22,6 +23,7 @@ from models.inversiones import (
     GetInstrumentosParams,
     GetInversionesParams,
     GetPreciosParams,
+    GuardarEstadoInversionesParams,
 )
 from structure import InversionDeletionError
 
@@ -114,6 +116,16 @@ def crear_inversion_endpoint(inv: InversionCrear):
 def get_inversiones(params: GetInversionesParams):
     inversiones = obtener_inversiones(**params.model_dump())
     return [InversionOut.model_validate(inv) for inv in inversiones]
+
+
+@router.post("/inversiones/estado", response_model=list[InversionOut], tags=["Inversiones"])
+def guardar_estado_inversiones_endpoint(params: GuardarEstadoInversionesParams):
+    """
+    Save a snapshot of the given inversiones at the provided date. Returns the
+    copies that were created/updated (used for debugging for now).
+    """
+    copias = guardar_estado_inversiones(params.inversion_ids, params.fecha)
+    return [InversionOut.model_validate(c) for c in copias]
 
 
 @router.get("/inversiones/meta", tags=["Inversiones"])

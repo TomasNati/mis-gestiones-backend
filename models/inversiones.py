@@ -52,3 +52,9 @@ class GetInversionesParams(BaseModel):
     @classmethod
     def clamp_page_number(cls, v):
         return max(1, v)
+
+
+class GuardarEstadoInversionesParams(BaseModel):
+    """Snapshot request: for each inversión id, store a copy dated `fecha`."""
+    inversion_ids: list[UUID]
+    fecha: datetime

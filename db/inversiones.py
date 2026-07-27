@@ -151,6 +151,9 @@ def obtener_inversiones(
 ) -> Sequence[Inversion]:
     with Session(database.engine) as session:
         query = select(Inversion).options(selectinload(Inversion.instrumento))
+        # Live inversiones are the ones without a fecha. Inversiones with a fecha are
+        # snapshots (history)
+        query = query.where(Inversion.fecha.is_(None))
         if id is not None: query = query.where(Inversion.id == id)
         if instrumento_id is not None: query = query.where(Inversion.instrumentoId == instrumento_id)
         if active is not None: query = query.where(Inversion.active == active)
@@ -161,6 +164,63 @@ def obtener_inversiones(
         result = session.execute(query)
         inversiones = result.scalars().all()
         return inversiones
+
+def guardar_estado_inversiones(inversion_ids: list[uuid.UUID], fecha: datetime) -> Sequence[Inversion]:
+    """
+    Snapshot the current state of the given inversiones at `fecha`.
+
+    For each inversión id: look up the original, then find an existing copy for
+    that date (same instrumento, broker and date — ignoring hours/minutes/seconds).
+    If a copy exists it is overwritten with the original's values; otherwise a new
+    inversión is created from the original with `fecha` set to the day (no time).
+    Returns the resulting copies with their instrumento loaded.
+    """
+    # Normalize to the day: store the copies at midnight, no hours/min/sec.
+    fecha_dia = datetime(fecha.year, fecha.month, fecha.day)
+
+    copia_ids: list[uuid.UUID] = []
+    with Session(database.engine) as session:
+        for inv_id in inversion_ids:
+            original = session.get(Inversion, inv_id)
+            if original is None:
+                continue
+
+            existing = session.execute(
+                select(Inversion).where(
+                    Inversion.instrumentoId == original.instrumentoId,
+                    Inversion.broker == original.broker,
+                    func.date(Inversion.fecha) == func.date(fecha_dia),
+                )
+            ).scalars().first()
+
+            if existing is not None:
+                existing.cantidad = original.cantidad
+                existing.fecha = fecha_dia
+                existing.active = True
+                copia = existing
+            else:
+                copia = Inversion(
+                    cantidad=original.cantidad,
+                    instrumentoId=original.instrumentoId,
+                    broker=original.broker,
+                    fecha=fecha_dia,
+                )
+                session.add(copia)
+
+            session.flush()
+            copia_ids.append(copia.id)
+
+        session.commit()
+
+        if not copia_ids:
+            return []
+
+        result = session.execute(
+            select(Inversion)
+            .options(selectinload(Inversion.instrumento))
+            .where(Inversion.id.in_(copia_ids))
+        )
+        return result.scalars().all()
 
 def obtener_instrumentos_con_precios(
         id: Optional[uuid.UUID] = None,
