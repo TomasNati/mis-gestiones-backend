@@ -178,15 +178,22 @@ def obtener_inversiones(
         inversiones = result.scalars().all()
         return inversiones
 
-def guardar_estado_inversiones(inversion_ids: list[uuid.UUID], fecha: datetime) -> Sequence[Inversion]:
+def guardar_estado_inversiones(
+    inversion_ids: list[uuid.UUID],
+    fecha: datetime,
+    sobreescribir: bool = False,
+) -> Sequence[Inversion]:
     """
     Snapshot the current state of the given inversiones at `fecha`.
 
     For each inversión id: look up the original, then find an existing copy for
     that date (same instrumento, broker and date — ignoring hours/minutes/seconds).
-    If a copy exists it is overwritten with the original's values; otherwise a new
-    inversión is created from the original with `fecha` set to the day (no time).
-    Returns the resulting copies with their instrumento loaded.
+    If a copy exists it is overwritten with the original's values only when
+    `sobreescribir` is True; otherwise that inversión is skipped and its existing
+    snapshot is left untouched. When no copy exists a new inversión is created from
+    the original with `fecha` set to the day (no time).
+    Returns the copies that were created or updated, with their instrumento loaded.
+    Skipped inversiones are not included.
     """
     # Normalize to the day: store the copies at midnight, no hours/min/sec.
     fecha_dia = datetime(fecha.year, fecha.month, fecha.day)
@@ -205,6 +212,9 @@ def guardar_estado_inversiones(inversion_ids: list[uuid.UUID], fecha: datetime) 
                     func.date(Inversion.fecha) == func.date(fecha_dia),
                 )
             ).scalars().first()
+
+            if existing is not None and not sobreescribir:
+                continue
 
             if existing is not None:
                 existing.cantidad = original.cantidad

@@ -62,3 +62,7 @@ class GuardarEstadoInversionesParams(BaseModel):
     """Snapshot request: for each inversión id, store a copy dated `fecha`."""
     inversion_ids: list[UUID]
     fecha: datetime
+    sobreescribir: bool = Field(
+        False,
+        description="When an snapshot already exists for that date: overwrite it if True, leave it untouched if False",
+    )

@@ -133,8 +133,11 @@ def guardar_estado_inversiones_endpoint(params: GuardarEstadoInversionesParams):
     """
     Save a snapshot of the given inversiones at the provided date. Returns the
     copies that were created/updated (used for debugging for now).
+
+    Inversiones that already have a snapshot for that date are skipped unless
+    `sobreescribir` is True, and are left out of the response.
     """
-    copias = guardar_estado_inversiones(params.inversion_ids, params.fecha)
+    copias = guardar_estado_inversiones(params.inversion_ids, params.fecha, params.sobreescribir)
     return [InversionOut.model_validate(c) for c in copias]
 
 
