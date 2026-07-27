@@ -142,6 +142,19 @@ def crear_inversion(inv: drive.InversionCrear) -> Inversion:
         ).scalar_one()
         return inversion
 
+def actualizar_inversion(id: uuid.UUID, cantidad: float) -> Optional[Inversion]:
+    with Session(database.engine) as session:
+        inversion = session.get(Inversion, id)
+        if inversion is None:
+            return None
+
+        inversion.cantidad = cantidad
+        session.commit()
+
+        return session.execute(
+            select(Inversion).options(selectinload(Inversion.instrumento)).where(Inversion.id == id)
+        ).scalar_one()
+
 def obtener_inversiones(
         id: Optional[uuid.UUID] = None,
         instrumento_id: Optional[uuid.UUID] = None,

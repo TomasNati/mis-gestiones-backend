@@ -26,6 +26,10 @@ class ActualizarPrecioEndpointParams(BaseModel):
     precio: PrecioOut
 
 
+class ActualizarInversionParams(BaseModel):
+    cantidad: float = Field(ge=0)
+
+
 class GetPreciosParams(BaseModel):
     id: Optional[UUID] = None
     instrumento_id: Optional[UUID] = None

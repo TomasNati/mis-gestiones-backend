@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 
 from db.inversiones import (
     actualizar_instrumento,
+    actualizar_inversion,
     actualizar_precio,
     crear_instrumento,
     crear_inversion,
@@ -19,6 +20,7 @@ from enums import broker_values, clase_renta_values, instrumento_tipo_values, mo
 from models.drive import InstrumentoConPreciosOut, InstrumentoCrear, InstrumentoOut, InversionCrear, InversionOut, PrecioCrear, PrecioOut
 from models.inversiones import (
     ActualizarInstrumentoEndpointParams,
+    ActualizarInversionParams,
     ActualizarPrecioEndpointParams,
     GetInstrumentosParams,
     GetInversionesParams,
@@ -110,6 +112,14 @@ def get_precios(params: GetPreciosParams):
 def crear_inversion_endpoint(inv: InversionCrear):
     i = crear_inversion(inv)
     return InversionOut.model_validate(i)
+
+
+@router.put("/inversion/{id}", response_model=InversionOut, tags=["Inversiones"])
+def actualizar_inversion_endpoint(id: UUID, params: ActualizarInversionParams):
+    inversion = actualizar_inversion(id, cantidad=params.cantidad)
+    if inversion is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Inversión no encontrada")
+    return InversionOut.model_validate(inversion)
 
 
 @router.post("/inversiones", response_model=list[InversionOut], tags=["Inversiones"])
