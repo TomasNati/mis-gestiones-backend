@@ -158,6 +158,10 @@ class GetInversionesParams(BaseModel):
     id: Optional[UUID] = None
     instrumento_id: Optional[UUID] = None
     active: Optional[bool] = None
+    fecha: Optional[datetime] = Field(
+        None,
+        description="Return the snapshot for this day instead of the live inversiones",
+    )
     page_size: Optional[int] = None
     page_number: int = 1
 

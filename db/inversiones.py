@@ -159,14 +159,19 @@ def obtener_inversiones(
         id: Optional[uuid.UUID] = None,
         instrumento_id: Optional[uuid.UUID] = None,
         active: Optional[bool] = None,
+        fecha: Optional[datetime] = None,
         page_size: Optional[int] = None,
         page_number: Optional[int] = None
 ) -> Sequence[Inversion]:
     with Session(database.engine) as session:
         query = select(Inversion).options(selectinload(Inversion.instrumento))
         # Live inversiones are the ones without a fecha. Inversiones with a fecha are
-        # snapshots (history)
-        query = query.where(Inversion.fecha.is_(None))
+        # snapshots (history), so `fecha` returns that day's snapshot instead of the
+        # live rows. Compared by day, matching how guardar_estado_inversiones stores it.
+        if fecha is None:
+            query = query.where(Inversion.fecha.is_(None))
+        else:
+            query = query.where(func.date(Inversion.fecha) == func.date(fecha))
         if id is not None: query = query.where(Inversion.id == id)
         if instrumento_id is not None: query = query.where(Inversion.instrumentoId == instrumento_id)
         if active is not None: query = query.where(Inversion.active == active)
