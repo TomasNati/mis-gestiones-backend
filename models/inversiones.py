@@ -116,6 +116,40 @@ class InstrumentosSearchOut(BaseModel):
         from_attributes = True
 
 
+class DolarCotizaciones(BaseModel):
+    oficial: float = Field(gt=0)
+    blue: float = Field(gt=0)
+    bolsa: float = Field(gt=0)
+    contadoconliqui: float = Field(gt=0)
+
+    class Config:
+        from_attributes = True
+
+
+class DolarHistoricoCrear(DolarCotizaciones):
+    fecha: datetime = Field(description="Día de la cotización")
+
+    class Config:
+        from_attributes = True
+
+
+class DolarHistoricoOut(DolarHistoricoCrear):
+    id: UUID
+    active: bool
+    created_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
+class DolaresHistoricosOut(BaseModel):
+    """Wrapper for a list of daily dólar cotizaciones"""
+    dolares_historicos: list[DolarHistoricoOut]
+
+    class Config:
+        from_attributes = True
+
+
 class GetInstrumentosParams(BaseModel):
     id: Optional[UUID] = None
     nombre: Optional[str] = None
@@ -142,6 +176,7 @@ class ActualizarInversionParams(BaseModel):
 class GetPreciosParams(BaseModel):
     id: Optional[UUID] = None
     instrumento_id: Optional[UUID] = None
+    fecha: Optional[datetime] = Field(None, description="Precios de ese día")
     desde_fecha: Optional[datetime] = None
     hasta_fecha: Optional[datetime] = None
     active: Optional[bool] = None
@@ -171,6 +206,21 @@ class GetInversionesParams(BaseModel):
         return max(1, v)
 
 
+class GetDolaresHistoricosParams(BaseModel):
+    id: Optional[UUID] = None
+    fecha: Optional[datetime] = Field(None, description="Cotizaciones de ese día exacto")
+    desde_fecha: Optional[datetime] = None
+    hasta_fecha: Optional[datetime] = None
+    active: Optional[bool] = None
+    page_size: Optional[int] = None
+    page_number: int = 1
+
+    @field_validator("page_number")
+    @classmethod
+    def clamp_page_number(cls, v):
+        return max(1, v)
+
+
 class GuardarEstadoInversionesParams(BaseModel):
     """Snapshot request: for each inversión id, store a copy dated `fecha`."""
     inversion_ids: list[UUID]
@@ -178,4 +228,7 @@ class GuardarEstadoInversionesParams(BaseModel):
     sobreescribir: bool = Field(
         False,
         description="When an snapshot already exists for that date: overwrite it if True, leave it untouched if False",
+    )
+    dolar: DolarCotizaciones = Field(
+        description="Cotizaciones del dólar del día, guardadas en dolar_historico junto al snapshot",
     )

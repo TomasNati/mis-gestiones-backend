@@ -139,5 +139,22 @@ class Inversion(Base):
     def __repr__(self) -> str:
         return f'Inversion(id={self.id}, cantidad={self.cantidad})'
 
+class DolarHistorico(Base):
+    __tablename__ = "dolar_historico"
+    __table_args__ = { 'schema': 'inversiones'}
+
+    id: Mapped[str] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
+    oficial: Mapped[float] = mapped_column()
+    blue: Mapped[float] = mapped_column()
+    bolsa: Mapped[float] = mapped_column()
+    contadoconliqui: Mapped[float] = mapped_column()
+    fecha: Mapped[datetime] = mapped_column(DateTime)
+    created_at: Mapped[Optional[datetime]] = mapped_column(DateTime, default=datetime.utcnow)
+
+    def __repr__(self) -> str:
+        return f'DolarHistorico(id={self.id}, fecha={self.fecha})'
+
+
 class InversionDeletionError(Exception):
     pass

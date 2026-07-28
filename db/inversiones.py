@@ -1,6 +1,7 @@
 from typing import Optional, Sequence
 import uuid
 from structure import (
+    DolarHistorico,
     Instrumento,
     InversionDeletionError,
     Precio,
@@ -110,6 +111,7 @@ def actualizar_precio(id: uuid.UUID, precio_update: modelos.PrecioOut) -> Precio
 def obtener_precios(
         id: Optional[uuid.UUID] = None,
         instrumento_id: Optional[uuid.UUID] = None,
+        fecha: Optional[datetime] = None,
         desde_fecha: Optional[datetime] = None,
         hasta_fecha: Optional[datetime] = None,
         active: Optional[bool] = None,
@@ -120,6 +122,7 @@ def obtener_precios(
         query = select(Precio).options(selectinload(Precio.instrumento))
         if id is not None: query = query.where(Precio.id == id)
         if instrumento_id is not None: query = query.where(Precio.instrumentoId == instrumento_id)
+        if fecha is not None: query = query.where(func.date(Precio.fecha) == func.date(fecha))
         if desde_fecha is not None: query = query.where(Precio.fecha >= desde_fecha)
         if hasta_fecha is not None: query = query.where(Precio.fecha <= hasta_fecha)
         if active is not None: query = query.where(Precio.active == active)
@@ -200,25 +203,16 @@ def obtener_fechas_historial_inversiones() -> Sequence[datetime]:
 def guardar_estado_inversiones(
     inversion_ids: list[uuid.UUID],
     fecha: datetime,
+    dolar: modelos.DolarCotizaciones,
     sobreescribir: bool = False,
 ) -> Sequence[Inversion]:
-    """
-    Snapshot the current state of the given inversiones at `fecha`.
-
-    For each inversión id: look up the original, then find an existing copy for
-    that date (same instrumento, broker and date — ignoring hours/minutes/seconds).
-    If a copy exists it is overwritten with the original's values only when
-    `sobreescribir` is True; otherwise that inversión is skipped and its existing
-    snapshot is left untouched. When no copy exists a new inversión is created from
-    the original with `fecha` set to the day (no time).
-    Returns the copies that were created or updated, with their instrumento loaded.
-    Skipped inversiones are not included.
-    """
     # Normalize to the day: store the copies at midnight, no hours/min/sec.
     fecha_dia = datetime(fecha.year, fecha.month, fecha.day)
 
     copia_ids: list[uuid.UUID] = []
     with Session(database.engine) as session:
+        _guardar_dolar_historico(session, dolar, fecha_dia, sobreescribir)
+
         for inv_id in inversion_ids:
             original = session.get(Inversion, inv_id)
             if original is None:
@@ -263,6 +257,100 @@ def guardar_estado_inversiones(
             .where(Inversion.id.in_(copia_ids))
         )
         return result.scalars().all()
+
+def _guardar_dolar_historico(
+        session: Session,
+        cotizaciones: modelos.DolarCotizaciones,
+        fecha_dia: datetime,
+        sobreescribir: bool,
+) -> Optional[DolarHistorico]:
+    existing = session.execute(
+        select(DolarHistorico).where(DolarHistorico.fecha == fecha_dia)
+    ).scalar_one_or_none()
+
+    if existing is not None and not sobreescribir:
+        return None
+
+    if existing is not None:
+        existing.oficial = cotizaciones.oficial
+        existing.blue = cotizaciones.blue
+        existing.bolsa = cotizaciones.bolsa
+        existing.contadoconliqui = cotizaciones.contadoconliqui
+        existing.active = True
+        return existing
+
+    d = DolarHistorico(
+        oficial=cotizaciones.oficial,
+        blue=cotizaciones.blue,
+        bolsa=cotizaciones.bolsa,
+        contadoconliqui=cotizaciones.contadoconliqui,
+        fecha=fecha_dia,
+    )
+    session.add(d)
+    return d
+
+def crear_dolar_historico(dolar: modelos.DolarHistoricoCrear) -> DolarHistorico:
+    fecha_dia = datetime(dolar.fecha.year, dolar.fecha.month, dolar.fecha.day)
+    with Session(database.engine) as session:
+        d = _guardar_dolar_historico(session, dolar, fecha_dia, sobreescribir=True)
+        session.commit()
+        session.refresh(d)
+        return d
+
+def actualizar_dolar_historico(
+        id: uuid.UUID,
+        dolar_update: modelos.DolarHistoricoOut
+) -> Optional[DolarHistorico]:
+    with Session(database.engine) as session:
+        d = session.get(DolarHistorico, id)
+        if d is None:
+            return None
+
+        d.oficial = dolar_update.oficial
+        d.blue = dolar_update.blue
+        d.bolsa = dolar_update.bolsa
+        d.contadoconliqui = dolar_update.contadoconliqui
+        d.fecha = datetime(dolar_update.fecha.year, dolar_update.fecha.month, dolar_update.fecha.day)
+        d.active = dolar_update.active
+        session.commit()
+        session.refresh(d)
+        return d
+
+def obtener_dolares_historicos(
+        id: Optional[uuid.UUID] = None,
+        fecha: Optional[datetime] = None,
+        desde_fecha: Optional[datetime] = None,
+        hasta_fecha: Optional[datetime] = None,
+        active: Optional[bool] = None,
+        page_size: Optional[int] = None,
+        page_number: Optional[int] = None
+) -> Sequence[DolarHistorico]:
+    with Session(database.engine) as session:
+        query = select(DolarHistorico)
+        if id is not None: query = query.where(DolarHistorico.id == id)
+        if fecha is not None: query = query.where(func.date(DolarHistorico.fecha) == func.date(fecha))
+        if desde_fecha is not None: query = query.where(DolarHistorico.fecha >= desde_fecha)
+        if hasta_fecha is not None: query = query.where(DolarHistorico.fecha <= hasta_fecha)
+        if active is not None: query = query.where(DolarHistorico.active == active)
+
+        query = query.order_by(DolarHistorico.fecha.desc())
+
+        if page_size is not None and page_number is not None:
+            query = query.limit(page_size).offset(page_size * (page_number - 1))
+
+        result = session.execute(query)
+        return result.scalars().all()
+
+def eliminar_dolar_historico(id: uuid.UUID) -> bool:
+    """Soft-delete: marca la cotización como inactiva. False si no existe."""
+    with Session(database.engine) as session:
+        d = session.get(DolarHistorico, id)
+        if d is None:
+            return False
+
+        d.active = False
+        session.commit()
+        return True
 
 def obtener_instrumentos_con_precios(
         id: Optional[uuid.UUID] = None,

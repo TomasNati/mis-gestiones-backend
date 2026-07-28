@@ -3,13 +3,17 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from db.inversiones import (
+    actualizar_dolar_historico,
     actualizar_instrumento,
     actualizar_inversion,
     actualizar_precio,
+    crear_dolar_historico,
     crear_instrumento,
     crear_inversion,
     crear_precio,
+    eliminar_dolar_historico,
     guardar_estado_inversiones,
+    obtener_dolares_historicos,
     obtener_fechas_historial_inversiones,
     obtener_instrumento_por_id,
     obtener_inversiones,
@@ -22,7 +26,11 @@ from models.inversiones import (
     ActualizarInstrumentoEndpointParams,
     ActualizarInversionParams,
     ActualizarPrecioEndpointParams,
+    DolarHistoricoCrear,
+    DolarHistoricoOut,
+    DolaresHistoricosOut,
     FechasHistorialInversionesOut,
+    GetDolaresHistoricosParams,
     GetInstrumentosParams,
     GetInversionesParams,
     GetPreciosParams,
@@ -138,14 +146,9 @@ def get_inversiones(params: GetInversionesParams):
 
 @router.post("/inversiones/estado", response_model=list[InversionOut], tags=["Inversiones"])
 def guardar_estado_inversiones_endpoint(params: GuardarEstadoInversionesParams):
-    """
-    Save a snapshot of the given inversiones at the provided date. Returns the
-    copies that were created/updated (used for debugging for now).
-
-    Inversiones that already have a snapshot for that date are skipped unless
-    `sobreescribir` is True, and are left out of the response.
-    """
-    copias = guardar_estado_inversiones(params.inversion_ids, params.fecha, params.sobreescribir)
+    copias = guardar_estado_inversiones(
+        params.inversion_ids, params.fecha, params.dolar, params.sobreescribir
+    )
     return [InversionOut.model_validate(c) for c in copias]
 
 
@@ -168,6 +171,51 @@ def inversiones_meta():
         "moneda": moneda_values(),
         "brokers": broker_values(),
     }
+
+@router.post("/dolar-historico", response_model=DolarHistoricoOut, tags=["Inversiones"])
+def crear_dolar_historico_endpoint(dolar: DolarHistoricoCrear):
+    """
+    Guardar las cotizaciones del dólar de un día. Si ya existe la de esa fecha, se
+    actualiza con los valores recibidos.
+    """
+    d = crear_dolar_historico(dolar)
+    return DolarHistoricoOut.model_validate(d)
+
+
+@router.post("/dolares-historicos", response_model=DolaresHistoricosOut, tags=["Inversiones"])
+def get_dolares_historicos(params: GetDolaresHistoricosParams):
+    """Cotizaciones del dólar por día, de la más reciente a la más antigua."""
+    dolares = obtener_dolares_historicos(**params.model_dump())
+    return DolaresHistoricosOut(
+        dolares_historicos=[DolarHistoricoOut.model_validate(d) for d in dolares]
+    )
+
+
+@router.get("/dolar-historico/{id}", response_model=DolarHistoricoOut, tags=["Inversiones"])
+def get_dolar_historico(id: UUID):
+    dolares = obtener_dolares_historicos(id=id)
+    if not dolares:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cotización no encontrada")
+    return DolarHistoricoOut.model_validate(dolares[0])
+
+
+@router.put("/dolar-historico/{id}", response_model=DolarHistoricoOut, tags=["Inversiones"])
+def actualizar_dolar_historico_endpoint(id: UUID, dolar: DolarHistoricoOut):
+    if str(dolar.id).lower() != str(id).lower():
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"ID mismatch: path ID is {id}, but body ID is {dolar.id}")
+    d = actualizar_dolar_historico(id, dolar_update=dolar)
+    if d is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cotización no encontrada")
+    return DolarHistoricoOut.model_validate(d)
+
+
+@router.delete("/dolar-historico/{id}", status_code=status.HTTP_204_NO_CONTENT, tags=["Inversiones"])
+def eliminar_dolar_historico_endpoint(id: UUID):
+    # soft-delete
+    if not eliminar_dolar_historico(id):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cotización no encontrada")
+
 
 @router.delete("/inversion/{id}", status_code=status.HTTP_204_NO_CONTENT, tags=["Inversiones"])
 def eliminar_inversion(id: UUID):
