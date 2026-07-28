@@ -4,7 +4,116 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field, field_validator
 
-from models.drive import InstrumentoOut, PrecioOut
+from enums import InstrumentoTipo, ClaseRenta, Moneda
+
+class InstrumentoCrear(BaseModel):
+    nombre: str
+    codigo: Optional[str] = None
+    tipo: InstrumentoTipo
+    clase_renta: ClaseRenta
+    moneda: Moneda
+
+    class Config:
+        from_attributes = True
+
+
+class InstrumentoOut(InstrumentoCrear):
+    id: UUID
+    active: bool
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
+class InstrumentoConPreciosOut(InstrumentoOut):
+    """InstrumentoOut plus its prices — used by read endpoints that load them."""
+    precios: list['PrecioSimple'] = []
+
+    class Config:
+        from_attributes = True
+
+
+class PrecioCrear(BaseModel):
+    monto: float
+    fecha: datetime
+    instrumento_id: UUID
+
+    class Config:
+        from_attributes = True
+
+
+class PrecioOut(BaseModel):
+    id: UUID
+    active: bool
+    monto: float
+    fecha: datetime
+    instrumentoId: UUID
+    created_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
+class PrecioSimple(BaseModel):
+    id: UUID
+    fecha: datetime
+    monto: float
+
+    class Config:
+        from_attributes = True
+
+
+class InstrumentoSimple(BaseModel):
+    id: UUID
+    nombre: str
+    codigo: Optional[str] = None
+    tipo: str
+    clase_renta: str
+    moneda: str
+
+    class Config:
+        from_attributes = True
+
+
+class InversionCrear(BaseModel):
+    cantidad: float
+    instrumento_id: UUID
+    broker: Optional[str] = None
+    fecha: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
+class InversionOut(BaseModel):
+    id: UUID
+    active: bool
+    cantidad: float
+    instrumento: InstrumentoSimple
+    broker: Optional[str] = None
+    fecha: Optional[datetime] = None
+    created_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
+class FechasHistorialInversionesOut(BaseModel):
+    """Wrapper for the distinct dates that have an inversiones snapshot"""
+    fechas: list[datetime]
+
+    class Config:
+        from_attributes = True
+
+
+class InstrumentosSearchOut(BaseModel):
+    """Wrapper for list of instrumentos with their latest prices"""
+    instrumentos: list[InstrumentoConPreciosOut]
+
+    class Config:
+        from_attributes = True
 
 
 class GetInstrumentosParams(BaseModel):

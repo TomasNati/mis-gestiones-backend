@@ -6,7 +6,7 @@ import httpx
 import httpx
 from uvicorn import logging
 
-import models.drive as drive
+import models.cotizaciones as modelos
 from services.cafci import download_cafci_to_memory, get_cafci_data_list, normalize_string
 from services.crypto_service import get_crypto_service
 from services.exchange_service import get_exchange_service
@@ -48,7 +48,7 @@ def get_fondos():
     return _FONDOS_CACHE["data"]
 
 
-@router.get("/instrumento/{ticker}", response_model=drive.InstrumentoPriceOut)
+@router.get("/instrumento/{ticker}", response_model=modelos.InstrumentoPriceOut)
 async def get_instrumento_price(ticker: str):
     """
     Get the latest price + currency of a financial instrument by scraping the
@@ -70,7 +70,7 @@ async def get_instrumento_price(ticker: str):
         raise HTTPException(status_code=500, detail=f"Error fetching instrument price: {str(e)}")
 
 
-@router.get("/fci/clase-fondos", response_model=drive.ClaseFondoSearchOut)
+@router.get("/fci/clase-fondos", response_model=modelos.ClaseFondoSearchOut)
 async def search_clase_fondos(
     id: Optional[str] = Query(None, description="Optional exact clase_fondo id."),
     nombre: Optional[str] = Query(None, description="Optional comma-separated keywords. Each must appear in the clase_fondo's `nombre` (case-insensitive)."),
@@ -105,7 +105,7 @@ async def search_clase_fondos(
         raise HTTPException(status_code=500, detail=f"Error fetching clase_fondos: {str(e)}")
 
 
-@router.get("/fci/search", response_model=drive.FCISearchOut)
+@router.get("/fci/search", response_model=modelos.FCISearchOut)
 async def search_fcis(
     codigo_cnv: Optional[str] = Query(None, description="Optional exact CNV code."),
     nombre: Optional[str] = Query(None, description="Optional comma-separated keywords. Each must appear in the fund's `nombre` (case-insensitive)."),
@@ -140,7 +140,7 @@ async def search_fcis(
         raise HTTPException(status_code=500, detail=f"Error fetching FCI info: {str(e)}")
 
 
-@router.get("/fci/{fondo_id}/{clase_id}", response_model=drive.FCIQuoteOut)
+@router.get("/fci/{fondo_id}/{clase_id}", response_model=modelos.FCIQuoteOut)
 async def get_fci_quote(fondo_id: str, clase_id: str, log: bool = Query(False, description="If true, log internal HTTP calls and inputs/outputs.")):
     """
     Get the latest quote for a mutual fund (FCI) from CAFCI.
@@ -164,7 +164,7 @@ async def get_fci_quote(fondo_id: str, clase_id: str, log: bool = Query(False, d
         raise HTTPException(status_code=500, detail=f"Error fetching FCI quote: {str(e)}")
 
 
-@router.get("2/fci/search", response_model=drive.FCINamesOut, tags=["Cotizaciones2"])
+@router.get("2/fci/search", response_model=modelos.FCINamesOut, tags=["Cotizaciones2"])
 async def cotizaciones2_search_fcis(
     codigo_cnv: Optional[str] = Query(None, description="Optional exact CNV code."),
     nombre: Optional[str] = Query(None, description="Optional comma-separated keywords. Each must appear in the fondo's or clase's `nombre` (case-insensitive)."),
@@ -269,7 +269,7 @@ async def yahoo_price(symbol: str):
         "price": price
     }
 
-@router.get("/dolar", response_model=list[drive.DolarOut])
+@router.get("/dolar", response_model=list[modelos.DolarOut])
 async def get_all_dolar_rates():
     """Get all USD/ARS exchange rates from DolarAPI"""
     try:
@@ -293,7 +293,7 @@ async def get_all_dolar_rates():
         raise HTTPException(status_code=500, detail=f"Error fetching exchange rates: {str(e)}")
 
 
-@router.get("/dolar/{tipo}", response_model=drive.DolarOut)
+@router.get("/dolar/{tipo}", response_model=modelos.DolarOut)
 async def get_dolar_especifico(tipo: str):
     """
     Get specific USD/ARS exchange rate from DolarAPI
@@ -308,7 +308,7 @@ async def get_dolar_especifico(tipo: str):
         raise HTTPException(status_code=500, detail=f"Error fetching {tipo} rate: {str(e)}")
 
 
-@router.get("/crypto/{crypto_id}", response_model=drive.CryptoOut)
+@router.get("/crypto/{crypto_id}", response_model=modelos.CryptoOut)
 async def get_crypto_price(crypto_id: str):
     """
     Get cryptocurrency price in USD and ARS from CoinGecko
@@ -323,7 +323,7 @@ async def get_crypto_price(crypto_id: str):
         raise HTTPException(status_code=500, detail=f"Error fetching crypto price: {str(e)}")
 
 
-@router.get("/crypto/top/{limit}", response_model=list[drive.CryptoTopOut])
+@router.get("/crypto/top/{limit}", response_model=list[modelos.CryptoTopOut])
 async def get_top_cryptos(
     limit: int = 10,
     vs_currency: str = Query("usd", description="Currency: usd, ars, eur, etc.")

@@ -1,5 +1,4 @@
 from typing import Optional, Sequence
-from models import drive
 from models.gestiones import (
     CategoriaBasicOut, 
     MovimientoGastoSearchResults, 

@@ -10,10 +10,10 @@ from sqlalchemy.orm import Session, selectinload, with_loader_criteria
 from db.db import database
 from sqlalchemy import func, select, asc, desc
 from datetime import datetime
-import models.drive as drive
+import models.inversiones as modelos
 
 
-def crear_instrumento(instr: drive.InstrumentoCrear) -> Instrumento:
+def crear_instrumento(instr: modelos.InstrumentoCrear) -> Instrumento:
     with Session(database.engine) as session:
         # Ensure enum values are stored as strings in DB
         tipo_val = instr.tipo.value if hasattr(instr.tipo, 'value') else instr.tipo
@@ -59,7 +59,7 @@ def obtener_instrumento_por_id(id: uuid.UUID) -> Instrumento:
         instrumento = result.scalars().first()
         return instrumento
 
-def actualizar_instrumento(id: uuid.UUID, instrumento_update: drive.InstrumentoOut) -> Instrumento:
+def actualizar_instrumento(id: uuid.UUID, instrumento_update: modelos.InstrumentoOut) -> Instrumento:
     with Session(database.engine) as session:
         ins = session.get(Instrumento, id)
         if ins:
@@ -74,7 +74,7 @@ def actualizar_instrumento(id: uuid.UUID, instrumento_update: drive.InstrumentoO
             session.refresh(ins)
         return ins
 
-def crear_precio(precio: drive.PrecioCrear) -> Precio:
+def crear_precio(precio: modelos.PrecioCrear) -> Precio:
     with Session(database.engine) as session:
         existing = session.execute(
             select(Precio).where(
@@ -95,7 +95,7 @@ def crear_precio(precio: drive.PrecioCrear) -> Precio:
         session.refresh(p)
         return p
 
-def actualizar_precio(id: uuid.UUID, precio_update: drive.PrecioOut) -> Precio:
+def actualizar_precio(id: uuid.UUID, precio_update: modelos.PrecioOut) -> Precio:
     with Session(database.engine) as session:
         p = session.get(Precio, id)
         if p:
@@ -132,7 +132,7 @@ def obtener_precios(
         precios = result.scalars().all()
         return precios
 
-def crear_inversion(inv: drive.InversionCrear) -> Inversion:
+def crear_inversion(inv: modelos.InversionCrear) -> Inversion:
     with Session(database.engine) as session:
         inversion = Inversion(cantidad=inv.cantidad, instrumentoId=inv.instrumento_id, broker=inv.broker, fecha=inv.fecha)
         session.add(inversion)
@@ -177,6 +177,20 @@ def obtener_inversiones(
         result = session.execute(query)
         inversiones = result.scalars().all()
         return inversiones
+
+def obtener_fechas_historial_inversiones() -> Sequence[datetime]:
+    with Session(database.engine) as session:
+        result = session.scalars(
+            select(Inversion.fecha)
+            .where(
+                Inversion.fecha.is_not(None),
+                Inversion.active.is_(True),
+            )
+            .distinct()
+            .order_by(Inversion.fecha.desc())
+        ).all()
+
+    return [fecha for fecha in result if fecha is not None]
 
 def guardar_estado_inversiones(
     inversion_ids: list[uuid.UUID],

@@ -10,6 +10,7 @@ from db.inversiones import (
     crear_inversion,
     crear_precio,
     guardar_estado_inversiones,
+    obtener_fechas_historial_inversiones,
     obtener_instrumento_por_id,
     obtener_inversiones,
     obtener_precios,
@@ -17,15 +18,22 @@ from db.inversiones import (
 )
 import db.inversiones
 from enums import broker_values, clase_renta_values, instrumento_tipo_values, moneda_values
-from models.drive import InstrumentoConPreciosOut, InstrumentoCrear, InstrumentoOut, InversionCrear, InversionOut, PrecioCrear, PrecioOut
 from models.inversiones import (
     ActualizarInstrumentoEndpointParams,
     ActualizarInversionParams,
     ActualizarPrecioEndpointParams,
+    FechasHistorialInversionesOut,
     GetInstrumentosParams,
     GetInversionesParams,
     GetPreciosParams,
     GuardarEstadoInversionesParams,
+    InstrumentoConPreciosOut,
+    InstrumentoCrear,
+    InstrumentoOut,
+    InversionCrear,
+    InversionOut,
+    PrecioCrear,
+    PrecioOut,
 )
 from structure import InversionDeletionError
 
@@ -139,6 +147,16 @@ def guardar_estado_inversiones_endpoint(params: GuardarEstadoInversionesParams):
     """
     copias = guardar_estado_inversiones(params.inversion_ids, params.fecha, params.sobreescribir)
     return [InversionOut.model_validate(c) for c in copias]
+
+
+@router.get("/inversiones/historial/fechas", response_model=FechasHistorialInversionesOut, tags=["Inversiones"])
+def get_fechas_historial_inversiones():
+    """
+    Return the distinct dates that have an inversiones snapshot, most recent
+    first. Live inversiones (the ones without a fecha) are not included.
+    """
+    fechas = obtener_fechas_historial_inversiones()
+    return FechasHistorialInversionesOut(fechas=fechas)
 
 
 @router.get("/inversiones/meta", tags=["Inversiones"])
