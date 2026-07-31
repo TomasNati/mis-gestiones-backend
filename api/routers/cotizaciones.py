@@ -298,7 +298,7 @@ async def get_dolar_especifico(tipo: str):
     """
     Get specific USD/ARS exchange rate from DolarAPI
     
-    Available types: oficial, blue, bolsa (MEP), contadoconliqui (CCL), mayorista, cripto, tarjeta
+    Available types: oficial, blue, bolsa, contadoconliqui (CCL), mayorista, cripto, tarjeta
     """
     try:
         exchange_service = get_exchange_service()

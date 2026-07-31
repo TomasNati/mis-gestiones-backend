@@ -20,7 +20,7 @@ class ClaseRenta(str, Enum):
 
 class Moneda(str, Enum):
     PESO = "PESO"
-    DOLAR = "DOLAR"
+    DOLAR_BOLSA = "DOLAR_BOLSA"
     DOLAR_CCL = "DOLAR_CCL"
 
 class Broker(str, Enum):

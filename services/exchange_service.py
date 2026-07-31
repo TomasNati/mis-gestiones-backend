@@ -81,8 +81,8 @@ class ExchangeService:
         except Exception as e:
             raise ValueError(f"Error fetching {tipo} rate: {str(e)}")
     
-    async def get_dolar_mep(self) -> Dict[str, Any]:
-        """Get MEP (Bolsa) rate"""
+    async def get_dolar_bolsa(self) -> Dict[str, Any]:
+        """Get Bolsa rate"""
         return await self.get_dolar_especifico("bolsa")
     
     async def get_dolar_blue(self) -> Dict[str, Any]:

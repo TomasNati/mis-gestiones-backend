@@ -96,7 +96,7 @@ class Instrumento(Base):
     tipo: Mapped[str] = mapped_column(String(30))
     clase_renta: Mapped[str] = mapped_column("clase_renta", String(10))
 
-    moneda: Mapped[str] = mapped_column(String(10))
+    moneda: Mapped[str] = mapped_column(String(20))
     active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[Optional[datetime]] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime, default=datetime.utcnow)
