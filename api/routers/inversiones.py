@@ -42,6 +42,7 @@ from models.inversiones import (
     InstrumentoOut,
     InversionCrear,
     InversionOut,
+    InversionesHistoricoOut,
     PrecioCrear,
     PrecioOut,
 )
@@ -146,16 +147,16 @@ def get_inversiones(params: GetInversionesParams):
     return [InversionOut.model_validate(inv) for inv in inversiones]
 
 
-@router.post("/inversiones-historico", tags=["Inversiones"])
+@router.post("/inversiones-historico", response_model=InversionesHistoricoOut, tags=["Inversiones"])
 def get_inversiones_historico(params: GetInversionesHistoricoParams):
-    """Historico de inversiones entre dos fechas. Placeholder por ahora."""
-    inversiones, _ = obtener_historico_inversiones(desde=params.desde, hasta=params.hasta)
-    return {
-        "message": "Historico de inversiones: endpoint en desarrollo",
-        "desde": params.desde,
-        "hasta": params.hasta,
-        "total_inversiones": len(inversiones),
-    }
+    """Historico de inversiones entre dos fechas (inclusive), agrupado por día.
+
+    Cada inversión se devuelve valorizada en todas las monedas (peso, dólar
+    oficial, dólar CCL y dólar bolsa) cuando ese día existe precio del
+    instrumento y cotización de dólar. Las que no pudieron valorizarse van en
+    `inversiones_incompletas`.
+    """
+    return obtener_historico_inversiones(desde=params.desde, hasta=params.hasta)
 
 
 @router.post("/inversiones/estado", response_model=list[InversionOut], tags=["Inversiones"])

@@ -1,5 +1,7 @@
 from typing import Optional, Sequence
 import uuid
+from datetime import date, datetime
+from enums import Moneda
 from structure import (
     DolarHistorico,
     Instrumento,
@@ -10,7 +12,6 @@ from structure import (
 from sqlalchemy.orm import Session, selectinload, with_loader_criteria
 from db.db import database
 from sqlalchemy import func, select, asc, desc
-from datetime import datetime
 import models.inversiones as modelos
 
 
@@ -203,9 +204,15 @@ def obtener_fechas_historial_inversiones() -> Sequence[datetime]:
 def obtener_historico_inversiones(
         desde: datetime,
         hasta: datetime,
-) -> tuple[Sequence[Inversion], Sequence[DolarHistorico]]:
-    """Inversiones activas entre dos fechas (inclusive) y las cotizaciones
-    de dólar activas del mismo rango."""
+) -> dict:
+    """Inversiones activas entre dos fechas (inclusive), agrupadas por día.
+
+    Cada inversión se valora en todas las monedas (peso, dólar oficial, dólar
+    CCL y dólar bolsa) con la misma lógica que `calcularValorInversion` del
+    frontend (src/hooks/inversiones/useInversiones.ts), siempre que ese día
+    exista cotización de dólar y precio del instrumento. Las inversiones a las
+    que les falta alguno van en una colección separada.
+    """
     with Session(database.engine) as session:
         inversiones = session.scalars(
             select(Inversion)
@@ -229,7 +236,83 @@ def obtener_historico_inversiones(
             .order_by(DolarHistorico.fecha.desc())
         ).all()
 
-    return inversiones, dolares
+        instrumento_ids = {inv.instrumentoId for inv in inversiones}
+        precios: Sequence[Precio] = []
+        if instrumento_ids:
+            precios = session.scalars(
+                select(Precio)
+                .where(
+                    Precio.instrumentoId.in_(instrumento_ids),
+                    Precio.active.is_(True),
+                    func.date(Precio.fecha) >= func.date(desde),
+                    func.date(Precio.fecha) <= func.date(hasta),
+                )
+                .order_by(Precio.fecha.desc())
+            ).all()
+
+    dolar_por_dia = {d.fecha.date(): d for d in dolares}
+    # Precio más reciente de cada instrumento dentro de cada día.
+    precio_por_dia: dict[tuple[str, date], Precio] = {}
+    for p in precios:
+        precio_por_dia.setdefault((str(p.instrumentoId), p.fecha.date()), p)
+
+    inversiones_por_dia: dict[date, list[Inversion]] = {}
+    for inv in inversiones:
+        inversiones_por_dia.setdefault(inv.fecha.date(), []).append(inv)
+
+    por_fecha: list[dict] = []
+    incompletas: list[dict] = []
+    for dia in sorted(inversiones_por_dia.keys(), reverse=True):
+        dolar = dolar_por_dia.get(dia)
+        valorizadas: list[dict] = []
+        for inv in inversiones_por_dia[dia]:
+            precio = precio_por_dia.get((str(inv.instrumentoId), dia))
+            if precio is None or dolar is None:
+                incompletas.append({
+                    'fecha': inv.fecha,
+                    'inversion': inv,
+                    'motivo': 'sin_precio' if precio is None else 'sin_dolar',
+                })
+                continue
+            valorizadas.append({
+                'inversion': inv,
+                'precio': precio.monto,
+                'valor': _calcular_valores(inv, precio.monto, dolar),
+            })
+        por_fecha.append({
+            'fecha': datetime(dia.year, dia.month, dia.day),
+            'dolar': dolar,
+            'inversiones': valorizadas,
+        })
+
+    return {'por_fecha': por_fecha, 'inversiones_incompletas': incompletas}
+
+
+MONEDAS_DOLAR = (Moneda.DOLAR_BOLSA.value, Moneda.DOLAR_CCL.value)
+
+
+def _calcular_valores(inv: Inversion, monto: float, dolar: DolarHistorico) -> dict:
+    """Valor de una inversión en todas las monedas a la vez. Misma lógica que
+    `calcularValorInversion` (src/hooks/inversiones/useInversiones.ts), que solo
+    devuelve el valor para una moneda, pero para todas.
+    """
+    valor_nativo = inv.cantidad * monto
+    if inv.instrumento.moneda in MONEDAS_DOLAR:
+        dolar_instrumento = (
+            dolar.bolsa
+            if inv.instrumento.moneda == Moneda.DOLAR_BOLSA.value
+            else dolar.contadoconliqui
+        )
+        valor_pesos = valor_nativo * dolar_instrumento
+    else:
+        valor_pesos = valor_nativo
+
+    return {
+        'peso': valor_pesos,
+        'dolar_oficial': valor_pesos / dolar.oficial,
+        'dolar_ccl': valor_pesos / dolar.contadoconliqui,
+        'dolar_bolsa': valor_pesos / dolar.bolsa,
+    }
 
 
 def guardar_estado_inversiones(

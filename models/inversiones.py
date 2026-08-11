@@ -150,6 +150,56 @@ class DolaresHistoricosOut(BaseModel):
         from_attributes = True
 
 
+class ValorInversion(BaseModel):
+    """Valor de una inversión expresado en todas las monedas."""
+    peso: float
+    dolar_oficial: float
+    dolar_ccl: float
+    dolar_bolsa: float
+
+    class Config:
+        from_attributes = True
+
+
+class InversionValorizada(BaseModel):
+    """Inversión de un día con su precio y su valor en todas las monedas."""
+    inversion: InversionOut
+    precio: float
+    valor: ValorInversion
+
+    class Config:
+        from_attributes = True
+
+
+class InversionIncompleta(BaseModel):
+    """Inversión que no pudo valorizarse por faltar precio o cotización del dólar."""
+    fecha: datetime
+    inversion: InversionOut
+    motivo: str
+
+    class Config:
+        from_attributes = True
+
+
+class GrupoInversionesPorFecha(BaseModel):
+    """Inversiones valorizadas de un mismo día."""
+    fecha: datetime
+    dolar: Optional[DolarHistoricoOut] = None
+    inversiones: list[InversionValorizada] = []
+
+    class Config:
+        from_attributes = True
+
+
+class InversionesHistoricoOut(BaseModel):
+    """Historico de inversiones agrupado por día y valorizado en todas las monedas."""
+    por_fecha: list[GrupoInversionesPorFecha] = []
+    inversiones_incompletas: list[InversionIncompleta] = []
+
+    class Config:
+        from_attributes = True
+
+
 class GetInstrumentosParams(BaseModel):
     id: Optional[UUID] = None
     nombre: Optional[str] = None
