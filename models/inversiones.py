@@ -221,6 +221,15 @@ class GetDolaresHistoricosParams(BaseModel):
         return max(1, v)
 
 
+class GetInversionesHistoricoParams(BaseModel):
+    """Historico de inversiones entre dos fechas (inclusive)."""
+    desde: datetime = Field(description="Fecha inicial (inclusive)")
+    hasta: datetime = Field(description="Fecha final (inclusive)")
+
+    class Config:
+        from_attributes = True
+
+
 class GuardarEstadoInversionesParams(BaseModel):
     """Snapshot request: for each inversión id, store a copy dated `fecha`."""
     inversion_ids: list[UUID]

@@ -200,6 +200,38 @@ def obtener_fechas_historial_inversiones() -> Sequence[datetime]:
 
     return [fecha for fecha in result if fecha is not None]
 
+def obtener_historico_inversiones(
+        desde: datetime,
+        hasta: datetime,
+) -> tuple[Sequence[Inversion], Sequence[DolarHistorico]]:
+    """Inversiones activas entre dos fechas (inclusive) y las cotizaciones
+    de dólar activas del mismo rango."""
+    with Session(database.engine) as session:
+        inversiones = session.scalars(
+            select(Inversion)
+            .options(selectinload(Inversion.instrumento))
+            .where(
+                Inversion.active.is_(True),
+                Inversion.fecha.is_not(None),
+                func.date(Inversion.fecha) >= func.date(desde),
+                func.date(Inversion.fecha) <= func.date(hasta),
+            )
+            .order_by(Inversion.fecha.desc())
+        ).all()
+
+        dolares = session.scalars(
+            select(DolarHistorico)
+            .where(
+                DolarHistorico.active.is_(True),
+                func.date(DolarHistorico.fecha) >= func.date(desde),
+                func.date(DolarHistorico.fecha) <= func.date(hasta),
+            )
+            .order_by(DolarHistorico.fecha.desc())
+        ).all()
+
+    return inversiones, dolares
+
+
 def guardar_estado_inversiones(
     inversion_ids: list[uuid.UUID],
     fecha: datetime,

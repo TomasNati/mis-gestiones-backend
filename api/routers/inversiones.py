@@ -19,6 +19,7 @@ from db.inversiones import (
     obtener_inversiones,
     obtener_precios,
     obtener_instrumentos_con_precios,
+    obtener_historico_inversiones,
 )
 import db.inversiones
 from enums import broker_values, clase_renta_values, instrumento_tipo_values, moneda_values
@@ -32,6 +33,7 @@ from models.inversiones import (
     FechasHistorialInversionesOut,
     GetDolaresHistoricosParams,
     GetInstrumentosParams,
+    GetInversionesHistoricoParams,
     GetInversionesParams,
     GetPreciosParams,
     GuardarEstadoInversionesParams,
@@ -142,6 +144,18 @@ def actualizar_inversion_endpoint(id: UUID, params: ActualizarInversionParams):
 def get_inversiones(params: GetInversionesParams):
     inversiones = obtener_inversiones(**params.model_dump())
     return [InversionOut.model_validate(inv) for inv in inversiones]
+
+
+@router.post("/inversiones-historico", tags=["Inversiones"])
+def get_inversiones_historico(params: GetInversionesHistoricoParams):
+    """Historico de inversiones entre dos fechas. Placeholder por ahora."""
+    inversiones, _ = obtener_historico_inversiones(desde=params.desde, hasta=params.hasta)
+    return {
+        "message": "Historico de inversiones: endpoint en desarrollo",
+        "desde": params.desde,
+        "hasta": params.hasta,
+        "total_inversiones": len(inversiones),
+    }
 
 
 @router.post("/inversiones/estado", response_model=list[InversionOut], tags=["Inversiones"])
