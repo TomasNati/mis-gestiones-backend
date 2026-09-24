@@ -33,7 +33,8 @@ class Subcategoria(Base):
 
     id: Mapped[str] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     nombre: Mapped[str] = mapped_column(String(255))
-    tipoDeGasto: Mapped[str] = mapped_column("tipodegasto", String(255))
+    tipoDeGasto: Mapped[Optional[str]] = mapped_column("tipodegasto", String(255), nullable=True)
+    comprobantesPath: Mapped[Optional[str]] = mapped_column("comprobantes_path", String(256), nullable=True)
     comentarios: Mapped[Optional[str]] = mapped_column(Text)
     categoriaId: Mapped[str] = mapped_column('categoria', ForeignKey("misgestiones.finanzas_categoria.id"))
     categoria: Mapped[Categoria] = relationship(back_populates='subcategorias')

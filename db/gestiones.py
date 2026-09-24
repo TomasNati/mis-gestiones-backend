@@ -269,7 +269,9 @@ def crear_subcategoria(subcategoria: SubcategoriaCrear) -> Subcategoria:
         subcategoria = Subcategoria(
             nombre=subcategoria.nombre, 
             comentarios=subcategoria.comentarios,
-            categoriaId=subcategoria.categoriaId)
+            categoriaId=subcategoria.categoriaId,
+            tipoDeGasto=subcategoria.tipoDeGasto,
+            comprobantesPath=subcategoria.comprobantesPath)
         session.add(subcategoria)
         session.commit()
         session.refresh(subcategoria)
@@ -282,6 +284,8 @@ def actualizar_subcategoria(subcategoria: SubcategoriaOut) -> Subcategoria:
             subcategoriaDB.nombre = subcategoria.nombre
             subcategoriaDB.comentarios = subcategoria.comentarios
             subcategoriaDB.categoriaId = subcategoria.categoriaId
+            subcategoriaDB.tipoDeGasto = subcategoria.tipoDeGasto
+            subcategoriaDB.comprobantesPath = subcategoria.comprobantesPath
             subcategoriaDB.active = subcategoria.active
             session.commit()
             session.refresh(subcategoriaDB)

@@ -39,6 +39,8 @@ class CategoriaOut(CategoriaBasicOut):
 
 class SubcategoriaCrear(CategoriasCrear):
     categoriaId: uuid.UUID
+    tipoDeGasto: Optional[str] = None
+    comprobantesPath: Optional[str] = None
 
 class SubcategoriaBasicOut(SubcategoriaCrear):
     id: uuid.UUID
