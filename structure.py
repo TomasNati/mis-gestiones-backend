@@ -87,6 +87,20 @@ class Vencimiento(Base):
     pago: Mapped[Optional[MovimientoGasto]] = relationship()
 
 
+class ComprobantePago(Base):
+    __tablename__ = "finanzas_comprobante_pago"
+    __table_args__ = { 'schema': 'misgestiones'}
+
+    id: Mapped[str] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    vencimientoId: Mapped[str] = mapped_column('vencimiento_id', ForeignKey("misgestiones.finanzas_vencimiento.id"))
+    vencimiento: Mapped['Vencimiento'] = relationship()
+    subpath: Mapped[str] = mapped_column(String(256))
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
+
+    def __repr__(self) -> str:
+        return f'ComprobantePago(id={self.id}, vencimientoId={self.vencimientoId}, subpath={self.subpath})'
+
+
 class Instrumento(Base):
     __tablename__ = "instrumento"
     __table_args__ = { 'schema': 'inversiones'}
