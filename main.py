@@ -5,7 +5,7 @@ import os
 
 import logging
 from dotenv import load_dotenv
-from api.routers import base, cotizaciones, inversiones, drive, finanzas
+from api.routers import base, cotizaciones, inversiones, drive, finanzas, comprobantes
 
 load_dotenv()
 logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO"))
@@ -37,3 +37,4 @@ app.include_router(finanzas.router)
 app.include_router(inversiones.router)
 app.include_router(cotizaciones.router)
 app.include_router(drive.router)
+app.include_router(comprobantes.router)

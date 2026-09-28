@@ -1,6 +1,4 @@
 import datetime
-import hmac
-import os
 from typing import Optional
 from urllib.parse import quote
 
@@ -9,15 +7,10 @@ from fastapi.responses import StreamingResponse
 
 import drive
 import models.drive as drive
+from api.security import require_api_key
 
 
 router = APIRouter(prefix="/api/drive", tags=["Drive"])
-
-
-def require_api_key(x_api_key: str = Header(...)) -> None:
-    secret = os.getenv("BACKEND_SHARED_SECRET")
-    if not secret or not hmac.compare_digest(x_api_key, secret):
-        raise HTTPException(status_code=401, detail={"error": "Unauthorized", "message": "invalid or missing X-API-Key"})
 
 
 @router.get("/api/drive/files", response_model=drive.DriveFileListOut, tags=["Drive"], dependencies=[Depends(require_api_key)])
