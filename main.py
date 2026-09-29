@@ -1,6 +1,7 @@
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.openapi.utils import get_openapi
 import os
 
 import logging
@@ -38,3 +39,27 @@ app.include_router(inversiones.router)
 app.include_router(cotizaciones.router)
 app.include_router(drive.router)
 app.include_router(comprobantes.router)
+
+
+def _como_binario(nodo):
+    if isinstance(nodo, list):
+        for item in nodo:
+            _como_binario(item)
+    elif isinstance(nodo, dict):
+        if nodo.get("contentMediaType") == "application/octet-stream":
+            nodo.pop("contentMediaType")
+            nodo["format"] = "binary"
+        for valor in nodo.values():
+            _como_binario(valor)
+
+
+def _openapi() -> dict:
+    if app.openapi_schema is None:
+        app.openapi_schema = get_openapi(
+            title=app.title, description=app.description, version=app.version, routes=app.routes
+        )
+        _como_binario(app.openapi_schema["components"]["schemas"])
+    return app.openapi_schema
+
+
+app.openapi = _openapi
