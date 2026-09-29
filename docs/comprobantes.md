@@ -1,8 +1,8 @@
 # Comprobantes de pago — endpoints
 
-> **Status:** IMPLEMENTADO (upload / download por path). El resto de la feature
-> (tabla `finanzas_comprobante_pago`, listado por vencimiento, rename, delete)
-> sigue pendiente.
+> **Status:** upload por `vencimiento_id`, que crea el registro de
+> `finanzas_comprobante_pago`; download por path. Listado por vencimiento, rename
+> y delete siguen pendientes.
 >
 > **Diseño y plan:** `mis-gestiones/docs/comprobantes_pago/Design.md` y `Plan.md`.
 > Este documento describe solo lo que hay implementado hoy.
@@ -14,9 +14,10 @@ Almacena los comprobantes de pago como archivos en el repo privado
 guardan en la **rama `main` del repo, versionados con git**: cada subida es un
 commit, y el path dentro del repo es la dirección del archivo.
 
-Los dos endpoints son **por path**, no por id de base de datos: no hay tabla
-todavía. Cuando exista `finanzas_comprobante_pago`, estos endpoints pasan a ser
-la capa de storage y se les agrega el router por `vencimiento_id` del plan.
+El upload es **por `vencimiento_id`**: valida que el vencimiento exista y tenga
+pago registrado, escribe el blob, y crea la fila de `finanzas_comprobante_pago`
+que lo apunta. El download sigue siendo **por path**, porque todavía no hay
+endpoint que resuelva el `base_path` desde el id.
 
 ## Auth
 
@@ -58,35 +59,57 @@ Se resuelve **una sola vez**, al importar `github.py`, no en cada request.
 
 ### `POST /api/comprobantes`
 
-`multipart/form-data`:
+`multipart/form-data`. Sube **un** comprobante y crea el registro de
+`finanzas_comprobante_pago` que lo apunta.
 
 | Campo | Tipo | Descripción |
 |---|---|---|
-| `path` | string | Carpeta destino dentro del repo, p.ej. `edese/2026/09` |
-| `files` | archivos | Uno o más. Se pueden repetir para subir varios |
+| `vencimiento_id` | string | UUID del vencimiento. Tiene que existir y estar pagado |
+| `base_path` | string | Carpeta principal del comprobante, p.ej. `aguas-de-santiago` (viene de `subcategoria.comprobantes_path`) |
+| `subpath` | string | Nombre dentro de esa carpeta, p.ej. `2026/09-factura.pdf`. Máximo 256 caracteres (el ancho de la columna) |
+| `file` | archivo | El comprobante. Uno solo por request |
 
-Todos los archivos del request van en **un solo commit**, resueltos con la
-**Git Data API** (`ref → commit → tree → blobs → tree → commit → ref`). Por eso
-una subida múltiple es atómica y no N commits con rollback manual.
+El path final dentro del repo es `base_path/subpath`. **El nombre del blob sale
+del `subpath`, no del `filename` que manda el cliente**: así el path guardado en
+la base y el del repo son siempre el mismo string, sin depender de que el
+cliente los mande consistentes.
+
+**Orden de las operaciones, a propósito:** se valida el vencimiento, se escribe
+el blob, y recién al final se inserta la fila. Si el commit de git falla no
+queda registro; el caso inverso (fila apuntando a un blob inexistente) es el que
+se evita.
+
+`base_path` y `subpath` los decide el cliente, que es el contrato de esta tanda.
+La validación dura que sí se hace es que **el vencimiento exista y tenga pago
+registrado** (`pagoId IS NOT NULL`): no hay comprobante de pago de un
+vencimiento sin pagar. Cerrar el path (derivarlo de `comprobantes_path` en vez de
+aceptarlo) queda para el endpoint por `vencimiento_id`.
+
+Un commit por request, resuelto con la **Git Data API**
+(`ref → commit → tree → blobs → tree → commit → ref`).
 
 **No hace falta que la carpeta exista.** En git las carpetas no son objetos: la
 Git Data API arma los directorios intermedios sola a partir del path del blob.
-Subir a `edese/2026/09` la primera vez crea la carpeta, y las siguientes subidas
-a la misma carpeta también funcionan. La única colisión posible es un **archivo**
-que ya ocupe el path exacto, o un archivo que esté en el medio de una carpeta a
-crear — en ambos casos es `409`, nunca un error de GitHub.
+La única colisión posible es un **archivo** que ya ocupe el path exacto, o un
+archivo que esté en el medio de una carpeta a crear — en ambos casos es `409`,
+nunca un error de GitHub.
 
 Respuesta `201`:
 
 ```json
 {
-  "commit": "9bdd6a8...",
-  "archivos": [
-    { "path": "edese/2026/09/comprobante.pdf", "nombre": "comprobante.pdf", "size": 33 }
-  ],
+  "id": "d9f72348-383a-4356-854d-b678f7c1ef70",
+  "commit": "e3cf635...",
+  "path": "aguas-de-santiago/2026/09-factura.pdf",
+  "nombre": "09-factura.pdf",
+  "size": 33,
+  "subpath": "2026/09-factura.pdf",
   "max_upload_bytes": 2000000
 }
 ```
+
+`id` es el id de `finanzas_comprobante_pago` recién creado, que es lo que usan
+después el rename y el delete.
 
 ### `GET /api/comprobantes/descargar?path=<path completo>`
 
@@ -94,6 +117,10 @@ Devuelve los bytes del archivo con `Content-Disposition: attachment` y el
 `Content-Type` deducido del nombre. La lectura usa la Contents API con
 `Accept: application/vnd.github.raw`, o sea **un request y bytes directos**,
 sin base64 y sin el límite de 1MB que tiene la respuesta JSON.
+
+Sigue siendo **por path**, no por id. Cuando se implemente
+`GET /api/comprobantes?vencimiento_ids=…` pasa a filtrar por `active` y a
+resolver el `base_path` desde la base.
 
 ### `GET /api/comprobantes/limites`
 
@@ -106,26 +133,26 @@ Shape uniforme: `{"detail": {"error": "...", "message": "..."}}`.
 
 | Status | Cuándo |
 |---|---|
-| `400` | `path` vacío, `..` en el path, caracteres no permitidos, path > 1000 chars, archivo vacío, mismo nombre dos veces en un request |
+| `400` | `base_path` o `subpath` vacíos, `..` en el path, caracteres no permitidos, path > 1000 chars, `subpath` > 256 chars, `subpath` sin nombre de archivo al final, archivo vacío |
 | `401` | `X-API-Key` presente pero incorrecto |
-| `404` | No hay archivo en ese path (descarga) |
-| `409` | Ya existe un archivo en el path destino, **o** hay un archivo donde va una carpeta. **Rechaza el request completo**, no sube una parte |
-| `413` | El body, o algún archivo, pasa `MAX_UPLOAD_BYTES` — en la subida y en la descarga |
+| `404` | No hay archivo en ese path (descarga), **o no existe el `vencimiento_id`** (subida) |
+| `409` | Ya existe un archivo en el path destino, hay un archivo donde va una carpeta, **o el vencimiento no tiene pago registrado** |
+| `413` | El body, o el archivo, pasa `MAX_UPLOAD_BYTES` — en la subida y en la descarga |
 | `415` | Extensión fuera de la allowlist (`.pdf`, `.jpg`, `.jpeg`, `.png`, `.heic`) |
-| `422` | Falta `path` o `files` en el body (validación de FastAPI) |
+| `422` | Falta `vencimiento_id`, `base_path`, `subpath` o `file` (validación de FastAPI), o `vencimiento_id` no es un UUID |
 | `502` | GitHub no configurado, token rechazado, error de la API de GitHub, o error de transporte (timeout, DNS) |
 
 ### Tamaño: cómo se aplica
 
 1. `Content-Length` del request contra el límite → `413` inmediato, sin llegar
    a GitHub.
-2. Después, cada archivo se lee en chunks de 256KB contando bytes y abortando
+2. Después, el archivo se lee en chunks de 256KB contando bytes y abortando
    con `413` en cuanto se excede. No se bufferea el archivo entero para
    checkear después: un cliente hostil igual agotaría la memoria del proceso.
 
 Los paths se validan con `normalizar_path`: se aceptan separadores Windows y
 Unix, se descartan barras duplicadas, y se rechazan `..`, segmentos ocultos
-(`.algo`), `:` y globbing. Sin esto, un `path` con traversal escribiría fuera
+(`.algo`), `:` y globbing. Sin esto, un path con traversal escribiría fuera
 del repo.
 
 ## Detalles de implementación que conviene no romper

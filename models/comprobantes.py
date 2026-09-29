@@ -1,4 +1,5 @@
 from typing import List, Optional
+from uuid import UUID
 
 from pydantic import BaseModel
 
@@ -13,8 +14,19 @@ class ComprobanteArchivoOut(BaseModel):
 
 
 class ComprobanteSubidaOut(BaseModel):
+    """Alta de un comprobante: un archivo, y el registro que lo referencia.
+
+    `id` es el id de `finanzas_comprobante_pago` recien creado, que es lo que
+    despues usan el rename y el delete. `commit` sigue siendo el sha de git del
+    commit que escribio el blob.
+    """
+
+    id: UUID
     commit: str
-    archivos: List[ComprobanteArchivoOut]
+    path: str
+    nombre: str
+    size: int
+    subpath: str
     max_upload_bytes: int
 
     class Config:

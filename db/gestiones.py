@@ -8,6 +8,7 @@ from models.gestiones import (
 )
 from structure import (
     Categoria,
+    ComprobantePago,
     Subcategoria,
     CategoriaDeletionError,
     SubcategoriaDeletionError,
@@ -333,4 +334,22 @@ def eliminar_subcategoria(id: uuid.UUID):
 
         subcategoria.active = False
         session.commit()
+
+def obtener_comprobante_pago_por_id(id: uuid.UUID) -> Optional[ComprobantePago]:
+    with Session(database.engine) as session:
+        return session.get(ComprobantePago, id)
+
+def crear_comprobante_pago(vencimientoId: uuid.UUID, subpath: str) -> ComprobantePago:
+    """Alta de un comprobante ya subido al storage.
+
+    Se llama **despues** del commit de git, no antes: si la escritura falla, el
+    archivo no llega a existir y no queda un registro apuntando a un blob que
+    nunca se escribio.
+    """
+    with Session(database.engine) as session:
+        comprobante = ComprobantePago(vencimientoId=vencimientoId, subpath=subpath)
+        session.add(comprobante)
+        session.commit()
+        session.refresh(comprobante)
+        return comprobante
 

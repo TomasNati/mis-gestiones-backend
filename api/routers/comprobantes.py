@@ -1,11 +1,12 @@
 import mimetypes
-from typing import List
+import uuid
 from urllib.parse import quote
 
 import httpx
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import StreamingResponse
 
+import db.gestiones as gestos
 import github
 import models.comprobantes as comprobantes
 from api.security import require_api_key
@@ -13,7 +14,6 @@ from api.security import require_api_key
 router = APIRouter(prefix="/api/comprobantes", tags=["Comprobantes"], dependencies=[Depends(require_api_key)])
 
 EXTENSIONES_PERMITIDAS = {".pdf", ".jpg", ".jpeg", ".png", ".heic"}
-GENERICOS = ("", "application/octet-stream", "binary/octet-stream")
 
 
 def _content_length(request: Request) -> int:
@@ -54,64 +54,90 @@ def _leer_con_limite(upload: UploadFile, nombre: str) -> bytes:
     return b"".join(partes)
 
 
-@router.post("", response_model=comprobantes.ComprobanteSubidaOut, status_code=201)
-def subir_archivos(
-    request: Request,
-    path: str = Form(...),
-    files: List[UploadFile] = File(...),
-):
-    """Sube uno o mas archivos al repo, en un unico commit.
+def _validar_vencimiento_pagado(vencimiento_id: uuid.UUID) -> None:
+    """El vencimiento tiene que existir y estar pagado antes de guardar un comprobante.
+    """
+    vencimientos = gestos.obtener_vencimientos(id=vencimiento_id, page_size=1)
+    vencimiento = vencimientos.vencimientos[0] if vencimientos.vencimientos else None
+    if vencimiento is None:
+        raise HTTPException(status_code=404, detail={"error": "Not Found", "message": f"no vencimiento with id '{vencimiento_id}'"})
+    if vencimiento.pagoId is None:
+        raise HTTPException(
+            status_code=409,
+            detail={"error": "Conflict", "message": f"vencimiento '{vencimiento_id}' has no payment registered; a comprobante requires one"},
+        )
 
-    `path` es la carpeta destino dentro del repo (por ejemplo `edese/2024/06`);
-    cada archivo conserva su nombre. Falla con 409 si alguno de los paths
-    destino ya existe, y con 413 si algun archivo pasa `MAX_UPLOAD_BYTES`.
+
+@router.post("", response_model=comprobantes.ComprobanteSubidaOut, status_code=201)
+def subir_comprobante(
+    request: Request,
+    vencimiento_id: str = Form(...),
+    base_path: str = Form(...),
+    subpath: str = Form(...),
+    file: UploadFile = File(...),
+):
+    """Sube **un** comprobante y registra el `finanzas_comprobante_pago` que lo apunta.
+
+    El path final dentro del repo es `base_path/subpath`, ambos decididos por el
+    cliente: `base_path` es la carpeta principal del comprobante
+    (`subcategoria.comprobantes_path`) y `subpath` el nombre dentro de ella
+    (`2026/09-factura.pdf`).
     """
     if _content_length(request) > github.MAX_UPLOAD_BYTES:
         raise HTTPException(
             status_code=413,
             detail={"error": "Payload Too Large", "message": f"upload exceeds the maximum of {github.MAX_UPLOAD_BYTES} bytes"},
         )
-    if not files:
-        raise HTTPException(status_code=400, detail={"error": "Bad Request", "message": "at least one file is required"})
-
-    # Se valida la carpeta destino por separado: si se armara el path completo
-    # con un `path` vacio, `normalizar_path` caeria a la raiz del repo en
-    # silencio en vez de rechazar el request.
-    carpeta = path.replace("\\", "/").strip().strip("/")
-    if not carpeta:
-        raise HTTPException(status_code=400, detail={"error": "Bad Request", "message": "path is required and must reference a folder inside the repository"})
-
-    entradas = []
-    for upload in files:
-        nombre = (upload.filename or "").replace("\\", "/").rsplit("/", 1)[-1].strip()
-        if not nombre or nombre in (".", ".."):
-            raise HTTPException(status_code=400, detail={"error": "Bad Request", "message": "every file needs a filename"})
-        _validar_extension(nombre)
-        entradas.append({"path": f"{carpeta}/{nombre}", "content": _leer_con_limite(upload, nombre)})
 
     try:
-        rutas = [github.normalizar_path(e["path"]) for e in entradas]
+        vencimiento_uuid = uuid.UUID(vencimiento_id)
+    except (ValueError, AttributeError, TypeError):
+        raise HTTPException(status_code=422, detail={"error": "Unprocessable Entity", "message": f"vencimiento_id '{vencimiento_id}' is not a valid uuid"})
+
+    base = base_path.replace("\\", "/").strip().strip("/")
+    if not base:
+        raise HTTPException(status_code=400, detail={"error": "Bad Request", "message": "base_path is required and must reference a folder inside the repository"})
+
+    sub = subpath.replace("\\", "/").strip().strip("/")
+    if not sub:
+        raise HTTPException(status_code=400, detail={"error": "Bad Request", "message": "subpath is required"})
+    if len(sub) > 256:
+        raise HTTPException(
+            status_code=400,
+            detail={"error": "Bad Request", "message": f"subpath is {len(sub)} characters, over the column limit of 256"},
+        )
+
+    nombre = sub.rsplit("/", 1)[-1].strip()
+    if not nombre or nombre in (".", ".."):
+        raise HTTPException(status_code=400, detail={"error": "Bad Request", "message": "subpath must end with a filename"})
+    _validar_extension(nombre)
+
+    contenido = _leer_con_limite(file, nombre)
+
+    try:
+        ruta = github.normalizar_path(f"{base}/{sub}")
     except ValueError as e:
         raise HTTPException(status_code=400, detail={"error": "Bad Request", "message": str(e)})
 
-    repetidos = sorted({r for r in rutas if rutas.count(r) > 1})
-    if repetidos:
-        raise HTTPException(status_code=400, detail={"error": "Bad Request", "message": f"same file name twice in one upload: {', '.join(repetidos)}"})
-    for entrada, ruta in zip(entradas, rutas):
-        entrada["path"] = ruta
+    _validar_vencimiento_pagado(vencimiento_uuid)
 
-    nombres = [e["path"].rsplit("/", 1)[-1] for e in entradas]
     try:
-        commit = github.escribir_paths(entradas, f"subir comprobantes: {', '.join(nombres)}")
+        commit = github.escribir_paths([{"path": ruta, "content": contenido}], f"subir comprobante: {nombre}")
     except httpx.HTTPError as e:
-        # github mapea los status de la API de GitHub; acá solo quedan los
-        # errores de transporte (timeout, DNS, conexion caída), que sin esto
+        # github mapea los status de la API de GitHub; aca solo quedan los
+        # errores de transporte (timeout, DNS, conexion caida), que sin esto
         # escaping como 500 con stack trace.
-        raise github.map_http_error(e, detalle=f"subir {', '.join(nombres)}")
+        raise github.map_http_error(e, detalle=f"subir {nombre}")
+
+    comprobante = gestos.crear_comprobante_pago(vencimiento_uuid, sub)
 
     return {
+        "id": comprobante.id,
         "commit": commit,
-        "archivos": [{"path": e["path"], "nombre": e["path"].rsplit("/", 1)[-1], "size": len(e["content"])} for e in entradas],
+        "path": ruta,
+        "nombre": nombre,
+        "size": len(contenido),
+        "subpath": sub,
         "max_upload_bytes": github.MAX_UPLOAD_BYTES,
     }
 
