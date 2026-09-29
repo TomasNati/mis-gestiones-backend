@@ -3,15 +3,14 @@ import uuid
 from urllib.parse import quote
 
 import httpx
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
+from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import StreamingResponse
 
 import db.gestiones as gestos
 import github
 import models.comprobantes as comprobantes
-from api.security import require_api_key
 
-router = APIRouter(prefix="/api/comprobantes", tags=["Comprobantes"], dependencies=[Depends(require_api_key)])
+router = APIRouter(prefix="/api/comprobantes", tags=["Comprobantes"])
 
 EXTENSIONES_PERMITIDAS = {".pdf", ".jpg", ".jpeg", ".png", ".heic"}
 
@@ -32,7 +31,7 @@ def _validar_extension(nombre: str) -> None:
 def _leer_con_limite(upload: UploadFile, nombre: str) -> bytes:
     """Lee el archivo abortando en cuanto pasa el limite, sin bufferear de mas.
 
-    Es el mismo patron del upload de Drive: `Content-Length` primero, y despues
+    El patron es `Content-Length` primero, y despues
     conteo por chunks de 256KB que corta el request con 413 en el momento en que
     se excede, en vez de dejar que el cliente agote la memoria del proceso.
     """

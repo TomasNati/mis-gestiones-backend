@@ -55,7 +55,6 @@ MAX_UPLOAD_BYTES = _resolve_max_upload_bytes()
 # GitHub rechaza paths de arbol mas largos que esto.
 MAX_PATH_LENGTH = 1000
 
-# Streaming: 256KB, el mismo tamano que usaba el upload de Drive.
 CHUNK_SIZE = 262144
 
 

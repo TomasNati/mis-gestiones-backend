@@ -21,15 +21,22 @@ endpoint que resuelva el `base_path` desde el id.
 
 ## Auth
 
-Los tres endpoints requieren el header `X-API-Key` con el valor de
-`BACKEND_SHARED_SECRET`. Se valida con `hmac.compare_digest` en
-`api/security.py`, como dependencia del router completo, así que no se puede
-olvidar en un endpoint nuevo. El token **nunca** sale del backend: ni URLs de
-`raw.githubusercontent.com` ni el PAT llegan al cliente.
+**No hay auth.** Los tres endpoints son públicos, igual que los routers de
+`finanzas`, `inversiones` y `cotizaciones`. A tener en cuenta:
 
-> Un header `X-API-Key` ausente devuelve **422** (FastAPI no encuentra el
-> parámetro requerido), no 401. Es el comportamiento que ya tenía el router de
-> Drive y no se cambió. El 401 es para key presente pero incorrecta.
+- El PAT de GitHub **nunca** sale del backend: ni URLs de
+  `raw.githubusercontent.com` ni el token llegan al cliente.
+- Lo único que separa "cualquiera que conozca la URL" de los comprobantes de
+  pago es el CORS, y el CORS **no es auth**: frena al JS del browser de leer la
+  response, no un `curl` directo. Cualquiera que pegue a la URL sube y baja
+  comprobantes.
+- Quien llega a la URL ya tiene que haber pasado el basic auth de la web app
+  (que es del lado de Vercel, no de este backend), pero el backend no lo
+  comprueba: es un servicio público detrás de un dominio con contraseña.
+
+> Cuando se quiera volver a cerrar, el lugar es un router-level
+> `dependencies=[Depends(require_api_key)]` como el que tenía este router hasta
+> ahora, para que no se pueda olvidar en un endpoint nuevo.
 
 ## Variables de entorno
 
@@ -134,7 +141,6 @@ Shape uniforme: `{"detail": {"error": "...", "message": "..."}}`.
 | Status | Cuándo |
 |---|---|
 | `400` | `base_path` o `subpath` vacíos, `..` en el path, caracteres no permitidos, path > 1000 chars, `subpath` > 256 chars, `subpath` sin nombre de archivo al final, archivo vacío |
-| `401` | `X-API-Key` presente pero incorrecto |
 | `404` | No hay archivo en ese path (descarga), **o no existe el `vencimiento_id`** (subida) |
 | `409` | Ya existe un archivo en el path destino, hay un archivo donde va una carpeta, **o el vencimiento no tiene pago registrado** |
 | `413` | El body, o el archivo, pasa `MAX_UPLOAD_BYTES` — en la subida y en la descarga |
@@ -186,10 +192,10 @@ git configurada, así que la identidad va explícita en el payload del commit
 
 ```bash
 uvicorn main:app --reload --port 5001
-curl -H "X-API-Key: $BACKEND_SHARED_SECRET" http://localhost:5001/api/comprobantes/limites
+curl http://localhost:5001/api/comprobantes/limites
 ```
 
 Matriz de `curl` usada para validar la implementación (subida simple y múltiple,
 round-trip de bytes con `cmp`, 409, 413 de subida y de descarga, 404, 415, 400 de
-path, 401/422 de auth). Después de las pruebas hay que confirmar que el repo
-quedó sin archivos de prueba.
+path). Después de las pruebas hay que confirmar que el repo quedó sin archivos de
+prueba.
