@@ -1,9 +1,10 @@
 import mimetypes
 import uuid
+from typing import Optional
 from urllib.parse import quote
 
 import httpx
-from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
+from fastapi import APIRouter, Body, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import StreamingResponse
 
 import db.gestiones as gestos
@@ -13,6 +14,12 @@ import models.comprobantes as comprobantes
 router = APIRouter(prefix="/api/comprobantes", tags=["Comprobantes"])
 
 EXTENSIONES_PERMITIDAS = {".pdf", ".jpg", ".jpeg", ".png", ".heic"}
+
+# Ceiling on how many vencimiento ids a single search accepts. Not a business
+# limit (the grid sends one page, ~50 rows) but a guard so a body with tens of
+# thousands of uuids doesn't turn into a pathological `IN`: without it the
+# failure is an opaque postgres 500 instead of a 400 that names the maximum.
+MAX_VENCIMIENTOS_POR_QUERY = 100
 
 
 def _content_length(request: Request) -> int:
@@ -65,6 +72,64 @@ def _validar_vencimiento_pagado(vencimiento_id: uuid.UUID) -> None:
             status_code=409,
             detail={"error": "Conflict", "message": f"vencimiento '{vencimiento_id}' has no payment registered; a comprobante requires one"},
         )
+
+
+def _dedup_vencimiento_ids(vencimiento_ids: list[uuid.UUID]) -> list[uuid.UUID]:
+    """Deduplicate a batch of vencimiento ids, preserving the order they came in.
+
+    Deduping before the query is not just an optimization: repeating an id
+    doesn't change what the `IN` returns, it only makes it longer, and the cap
+    below is counted on the deduped list so repeating an id can't be used to slip
+    past it.
+
+    The uuids themselves are already validated by pydantic at this point, so a
+    malformed id is a 422 from FastAPI, not something handled here.
+    """
+    ids: list[uuid.UUID] = []
+    vistos: set[uuid.UUID] = set()
+
+    for vencimiento_id in vencimiento_ids:
+        if vencimiento_id not in vistos:
+            vistos.add(vencimiento_id)
+            ids.append(vencimiento_id)
+
+    if not ids:
+        raise HTTPException(
+            status_code=400,
+            detail={"error": "Bad Request", "message": "vencimiento_ids must contain at least one uuid"},
+        )
+    if len(ids) > MAX_VENCIMIENTOS_POR_QUERY:
+        raise HTTPException(
+            status_code=400,
+            detail={"error": "Bad Request", "message": f"too many vencimiento_ids: {len(ids)}, the maximum is {MAX_VENCIMIENTOS_POR_QUERY}"},
+        )
+    return ids
+
+
+def _path_resuelto(base_path: Optional[str], subpath: str) -> Optional[str]:
+    """`comprobantes_path/subpath`, normalized, or `None` when it can't be built.
+
+    Reuses `github.normalizar_path` instead of concatenating by hand so the path
+    validation isn't duplicated. A failure here isn't a bad request: it means the
+    subcategoria's `comprobantes_path` is unusable, and returning the comprobante
+    with a null `path` beats failing the whole listing the grid is waiting on.
+
+    The `strip()` on the base is what keeps the repo-root case out: without it a
+    whitespace-only `comprobantes_path` builds `"   /2026/x.pdf"`,
+    `normalizar_path` drops the empty segment and hands back `2026/x.pdf`, i.e. a
+    comprobante pointing at the repo root. Same trap as on the upload path.
+    """
+    base = (base_path or "").strip()
+    if not base:
+        return None
+    try:
+        return github.normalizar_path(f"{base}/{subpath}")
+    except ValueError:
+        return None
+    try:
+        return github.normalizar_path(f"{base}/{subpath}")
+    except ValueError:
+        return None
 
 
 @router.post("", response_model=comprobantes.ComprobanteSubidaOut, status_code=201)
@@ -138,6 +203,38 @@ def subir_comprobante(
         "size": len(contenido),
         "subpath": sub,
         "max_upload_bytes": github.MAX_UPLOAD_BYTES,
+    }
+
+
+@router.post("/buscar", response_model=comprobantes.ComprobanteSearchResults)
+def buscar_comprobantes(vencimiento_ids: list[uuid.UUID] = Body(...)):
+    """Batch lookup: which comprobantes these vencimientos have.
+
+    """
+    ids = _dedup_vencimiento_ids(vencimiento_ids)
+    encontrados = gestos.obtener_comprobantes_por_vencimientos(ids)
+
+    por_vencimiento: dict[uuid.UUID, list[dict]] = {vencimiento_id: [] for vencimiento_id in ids}
+
+    for comprobante in encontrados:
+        subcategoria = comprobante.vencimiento.subcategoria
+        por_vencimiento[comprobante.vencimientoId].append(
+            {
+                "id": comprobante.id,
+                "vencimiento_id": comprobante.vencimientoId,
+                "subpath": comprobante.subpath,
+                "path": _path_resuelto(subcategoria.comprobantesPath if subcategoria else None, comprobante.subpath),
+                "nombre": github.nombre_de_archivo(comprobante.subpath),
+                "activo": comprobante.active,
+            }
+        )
+
+    return {
+        "total": len(encontrados),
+        "comprobantes": [
+            {"vencimiento_id": vencimiento_id, "comprobantes": por_vencimiento[vencimiento_id]}
+            for vencimiento_id in ids
+        ],
     }
 
 

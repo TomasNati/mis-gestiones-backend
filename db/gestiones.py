@@ -353,3 +353,20 @@ def crear_comprobante_pago(vencimientoId: uuid.UUID, subpath: str) -> Comprobant
         session.refresh(comprobante)
         return comprobante
 
+def obtener_comprobantes_por_vencimientos(vencimientoIds: Sequence[uuid.UUID]) -> Sequence[ComprobantePago]:
+    """**Active** comprobantes for a batch of vencimientos.
+    """
+    if vencimientoIds is None or (len(vencimientoIds) == 0): return []
+
+    with Session(database.engine) as session:
+        query = (
+            select(ComprobantePago)
+            .options(
+                selectinload(ComprobantePago.vencimiento).selectinload(Vencimiento.subcategoria)
+            )
+            .where(ComprobantePago.active.is_(True))
+            .where(ComprobantePago.vencimientoId.in_(vencimientoIds))
+            .order_by(ComprobantePago.vencimientoId, ComprobantePago.subpath)
+        )
+        result = session.execute(query)
+        return result.scalars().all()

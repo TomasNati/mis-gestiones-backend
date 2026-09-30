@@ -40,3 +40,31 @@ class ComprobanteLimitesOut(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class ComprobanteOut(BaseModel):
+    """A comprobante as the grid needs it.
+    """
+
+    id: UUID
+    vencimiento_id: UUID
+    subpath: str
+    path: Optional[str]
+    nombre: str
+    activo: bool
+
+    class Config:
+        from_attributes = True
+
+
+class ComprobantesDeVencimientoOut(BaseModel):
+    vencimiento_id: UUID
+    comprobantes: list[ComprobanteOut]
+
+
+class ComprobanteSearchResults(BaseModel):
+    total: int
+    comprobantes: list[ComprobantesDeVencimientoOut]
+
+    class Config:
+        from_attributes = True
