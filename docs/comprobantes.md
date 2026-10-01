@@ -15,9 +15,9 @@ Almacena los comprobantes de pago como archivos en el repo privado
 guardan en la **rama `main` del repo, versionados con git**: cada subida es un
 commit, y el path dentro del repo es la dirección del archivo.
 
-El upload es **por `vencimiento_id`**: valida que el vencimiento exista y tenga
-pago registrado, escribe el blob, y crea la fila de `finanzas_comprobante_pago`
-que lo apunta. La búsqueda es **por lote de `vencimiento_ids`** y trae el path ya
+El upload es **por `vencimiento_id`**: valida que el vencimiento exista (sin
+exigir pago registrado), escribe el blob, y crea la fila de
+`finanzas_comprobante_pago` que lo apunta. La búsqueda es **por lote de `vencimiento_ids`** y trae el path ya
 resuelto, así que el cliente no necesita saber de dónde sale cada parte para
 descargar. El download sigue siendo **por path**: no valida contra la base, solo
 resuelve el blob.
@@ -74,7 +74,7 @@ Se resuelve **una sola vez**, al importar `github.py`, no en cada request.
 
 | Campo | Tipo | Descripción |
 |---|---|---|
-| `vencimiento_id` | string | UUID del vencimiento. Tiene que existir y estar pagado |
+| `vencimiento_id` | string | UUID del vencimiento. Tiene que existir; no hace falta que tenga pago registrado |
 | `base_path` | string | Carpeta principal del comprobante, p.ej. `aguas-de-santiago` (viene de `subcategoria.comprobantes_path`) |
 | `subpath` | string | Nombre dentro de esa carpeta, p.ej. `2026/09-factura.pdf`. Máximo 256 caracteres (el ancho de la columna) |
 | `file` | archivo | El comprobante. Uno solo por request |
@@ -90,10 +90,11 @@ queda registro; el caso inverso (fila apuntando a un blob inexistente) es el que
 se evita.
 
 `base_path` y `subpath` los decide el cliente, que es el contrato de esta tanda.
-La validación dura que sí se hace es que **el vencimiento exista y tenga pago
-registrado** (`pagoId IS NOT NULL`): no hay comprobante de pago de un
-vencimiento sin pagar. Cerrar el path (derivarlo de `comprobantes_path` en vez de
-aceptarlo) queda para el endpoint por `vencimiento_id`.
+La única validación contra la base es que **el vencimiento exista**: es lo que
+hace válida la FK de `vencimiento_id`. **No se exige que tenga pago registrado**
+(`pagoId` puede ser `NULL`), así que se puede adjuntar un comprobante a un
+vencimiento todavía impago. Cerrar el path (derivarlo de `comprobantes_path` en
+vez de aceptarlo) queda pendiente.
 
 Un commit por request, resuelto con la **Git Data API**
 (`ref → commit → tree → blobs → tree → commit → ref`).
@@ -215,7 +216,7 @@ Shape uniforme: `{"detail": {"error": "...", "message": "..."}}`.
 |---|---|
 | `400` | `base_path` o `subpath` vacíos, `..` en el path, caracteres no permitidos, path > 1000 chars, `subpath` > 256 chars, `subpath` sin nombre de archivo al final, archivo vacío; en la búsqueda, array de ids vacío o más de 100 ids |
 | `404` | No hay archivo en ese path (descarga), **o no existe el `vencimiento_id`** (subida) |
-| `409` | Ya existe un archivo en el path destino, hay un archivo donde va una carpeta, **o el vencimiento no tiene pago registrado** |
+| `409` | Ya existe un archivo en el path destino, o hay un archivo donde va una carpeta |
 | `413` | El body, o el archivo, pasa `MAX_UPLOAD_BYTES` — en la subida y en la descarga |
 | `415` | Extensión fuera de la allowlist (`.pdf`, `.jpg`, `.jpeg`, `.png`, `.heic`) |
 | `422` | Falta `vencimiento_id`, `base_path`, `subpath` o `file` (validación de FastAPI), o `vencimiento_id` no es un UUID; en la búsqueda, el body no es un array, falta, o algún elemento no es un UUID |

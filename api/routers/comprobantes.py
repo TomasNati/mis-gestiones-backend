@@ -60,18 +60,12 @@ def _leer_con_limite(upload: UploadFile, nombre: str) -> bytes:
     return b"".join(partes)
 
 
-def _validar_vencimiento_pagado(vencimiento_id: uuid.UUID) -> None:
-    """El vencimiento tiene que existir y estar pagado antes de guardar un comprobante.
+def _validar_vencimiento_existe(vencimiento_id: uuid.UUID) -> None:
+    """The vencimiento has to exist before storing a comprobante against it.
     """
     vencimientos = gestos.obtener_vencimientos(id=vencimiento_id, page_size=1)
-    vencimiento = vencimientos.vencimientos[0] if vencimientos.vencimientos else None
-    if vencimiento is None:
+    if not vencimientos.vencimientos:
         raise HTTPException(status_code=404, detail={"error": "Not Found", "message": f"no vencimiento with id '{vencimiento_id}'"})
-    if vencimiento.pagoId is None:
-        raise HTTPException(
-            status_code=409,
-            detail={"error": "Conflict", "message": f"vencimiento '{vencimiento_id}' has no payment registered; a comprobante requires one"},
-        )
 
 
 def _dedup_vencimiento_ids(vencimiento_ids: list[uuid.UUID]) -> list[uuid.UUID]:
@@ -183,7 +177,7 @@ def subir_comprobante(
     except ValueError as e:
         raise HTTPException(status_code=400, detail={"error": "Bad Request", "message": str(e)})
 
-    _validar_vencimiento_pagado(vencimiento_uuid)
+    _validar_vencimiento_existe(vencimiento_uuid)
 
     try:
         commit = github.escribir_paths([{"path": ruta, "content": contenido}], f"subir comprobante: {nombre}")
