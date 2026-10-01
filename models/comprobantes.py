@@ -68,3 +68,14 @@ class ComprobanteSearchResults(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class ComprobanteEliminadoOut(BaseModel):
+    id: UUID
+    path: Optional[str]
+    nombre: str
+    subpath: str
+    borrado: bool
+
+    class Config:
+        from_attributes = True

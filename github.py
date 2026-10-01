@@ -324,3 +324,22 @@ def escribir_paths(entradas: Sequence[Dict], mensaje: str) -> str:
         nuevo_commit = crear_commit(client, [commit_sha], tree_sha, mensaje)
         actualizar_ref(client, nuevo_commit)
         return nuevo_commit
+
+
+def borrar_archivo(ruta: str) -> bool:
+    with _client() as client:
+        commit_sha = obtener_sha_de_rama(client)
+        arbol = obtener_arbol_recursivo(client, commit_sha)
+
+        if arbol["entradas"].get(ruta) != "blob":
+            LOGGER.info("borrar %s: no hay ningun archivo en ese path, no se escribe commit", ruta)
+            return False
+
+        tree_sha = crear_arbol(
+            client,
+            arbol["sha"],
+            [{"path": ruta, "mode": "100644", "type": "blob", "sha": None}],
+        )
+        nuevo_commit = crear_commit(client, [commit_sha], tree_sha, f"borrar comprobante: {nombre_de_archivo(ruta)}")
+        actualizar_ref(client, nuevo_commit)
+        return True

@@ -1,3 +1,4 @@
+import logging
 import mimetypes
 import uuid
 from typing import Optional
@@ -10,6 +11,8 @@ from fastapi.responses import StreamingResponse
 import db.gestiones as gestos
 import github
 import models.comprobantes as comprobantes
+
+LOGGER = logging.getLogger("comprobantes")
 
 router = APIRouter(prefix="/api/comprobantes", tags=["Comprobantes"])
 
@@ -115,10 +118,6 @@ def _path_resuelto(base_path: Optional[str], subpath: str) -> Optional[str]:
     """
     base = (base_path or "").strip()
     if not base:
-        return None
-    try:
-        return github.normalizar_path(f"{base}/{subpath}")
-    except ValueError:
         return None
     try:
         return github.normalizar_path(f"{base}/{subpath}")
@@ -269,3 +268,39 @@ def limites():
     recibir un 413 seco."""
     repo = f"{github.GITHUB_REPO_OWNER}/{github.GITHUB_REPO_NAME}" if github.GITHUB_REPO_OWNER and github.GITHUB_REPO_NAME else None
     return {"max_upload_bytes": github.MAX_UPLOAD_BYTES, "repo": repo, "branch": github.GITHUB_REPO_BRANCH}
+
+
+@router.delete("/{comprobante_id}", response_model=comprobantes.ComprobanteEliminadoOut)
+def eliminar_comprobante(comprobante_id: uuid.UUID):
+    comprobante = gestos.obtener_comprobante_pago_por_id(comprobante_id)
+    if comprobante is None or not comprobante.active:
+        raise HTTPException(
+            status_code=404,
+            detail={"error": "Not Found", "message": f"no active comprobante with id '{comprobante_id}'"},
+        )
+
+    subcategoria = comprobante.vencimiento.subcategoria if comprobante.vencimiento else None
+    ruta = _path_resuelto(subcategoria.comprobantesPath if subcategoria else None, comprobante.subpath)
+
+    if ruta is None:
+        LOGGER.warning(
+            "comprobante %s: la subcategoria no tiene comprobantes_path utilizable, "
+            "se da de baja el registro sin borrar archivo",
+            comprobante_id,
+        )
+        borrado = False
+    else:
+        try:
+            borrado = github.borrar_archivo(ruta)
+        except httpx.HTTPError as e:
+            raise github.map_http_error(e, detalle=f"borrar {comprobante.subpath}")
+
+    gestos.dar_de_baja_comprobante_pago(comprobante_id)
+
+    return {
+        "id": comprobante_id,
+        "path": ruta,
+        "nombre": github.nombre_de_archivo(comprobante.subpath),
+        "subpath": comprobante.subpath,
+        "borrado": borrado,
+    }

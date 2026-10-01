@@ -24,7 +24,7 @@ resuelve el blob.
 
 ## Auth
 
-**No hay auth.** Los tres endpoints son públicos, igual que los routers de
+**No hay auth.** Los cuatro endpoints son públicos, igual que los routers de
 `finanzas`, `inversiones` y `cotizaciones`. A tener en cuenta:
 
 - El PAT de GitHub **nunca** sale del backend: ni URLs de
@@ -208,6 +208,46 @@ comprobaciones tiene que pasar antes por el listado.
 Devuelve `max_upload_bytes` (y el repo y la rama configurados) para que la UI
 valide el tamaño en el cliente antes de subir, en vez de recibir un 413 seco.
 
+### `DELETE /api/comprobantes/{comprobante_id}`
+
+Da de baja el `finanzas_comprobante_pago` (`active = false`) **y borra el archivo
+del repo**. Devuelve `200` con `{id, path, nombre, subpath, borrado}`.
+
+A diferencia de la descarga, este endpoint **sí** consulta la base: el id es del
+registro, no del path, y el path se arma acá con el `comprobantes_path` de la
+subcategoría del vencimiento del comprobante.
+
+**El orden es el inverso del alta y es deliberado: primero el blob, después el
+`active = false`.**
+
+- Blob primero: si el borrado del archivo falla, el registro sigue `active`, el
+  comprobante sigue apareciendo en la grilla y se puede reintentar. Al revés
+  queda un registro invisible apuntando a un blob huérfano, que nadie puede
+  volver a encontrar para borrar, y que además cuenta para el
+  `MAX_UPLOAD_BYTES` de cada descarga futura.
+- Por eso `crear_comprobante_pago` también se llama después del commit de git, y
+  por eso el error de GitHub sale **antes** de tocar la base: si el borrado
+  falla, no hay nada que deshacer.
+
+Cosas que conviene no romper:
+
+- **Es idempotente.** Un comprobante ya dado de baja es `404` (no hay
+  comprobante activo con ese id), no un `500` por unique constraint. Y un
+  comprobante activo **cuyo archivo ya no está en el repo** se da de baja igual y
+  responde `borrado: false`: el registro hay que limpiarlo de todas formas, y es
+  el caso de reparación que la UI ya anticipa en el mensaje de descarga ("se
+  puede haber borrado el archivo sin dar de baja el registro").
+- **`borrado: false` no es un error.** Es el `False` que devuelve
+  `github.borrar_archivo` cuando el path no estaba, en cuyo caso no se escribe
+  ningún commit.
+- **Sin `comprobantes_path` no hay borrado de archivo**, pero el registro se da
+  de baja igual (log por warning). Si no, quedaría un comprobante que aparece en
+  la grilla sin forma de baixar.
+- El borrado va por la **Git Data API** (`sha: None` en el árbol), no por el
+  `DELETE` de la Contents API, por coherencia con `escribir_paths`: la Contents
+  API resuelve el ref por separado en cada llamada, así que un borrado puede
+  competir con una subida concurrente.
+
 ## Errores
 
 Shape uniforme: `{"detail": {"error": "...", "message": "..."}}`.
@@ -215,7 +255,7 @@ Shape uniforme: `{"detail": {"error": "...", "message": "..."}}`.
 | Status | Cuándo |
 |---|---|
 | `400` | `base_path` o `subpath` vacíos, `..` en el path, caracteres no permitidos, path > 1000 chars, `subpath` > 256 chars, `subpath` sin nombre de archivo al final, archivo vacío; en la búsqueda, array de ids vacío o más de 100 ids |
-| `404` | No hay archivo en ese path (descarga), **o no existe el `vencimiento_id`** (subida) |
+| `404` | No hay archivo en ese path (descarga), **o no existe el `vencimiento_id`** (subida), **o no hay un comprobante activo con ese id** (baja) |
 | `409` | Ya existe un archivo en el path destino, o hay un archivo donde va una carpeta |
 | `413` | El body, o el archivo, pasa `MAX_UPLOAD_BYTES` — en la subida y en la descarga |
 | `415` | Extensión fuera de la allowlist (`.pdf`, `.jpg`, `.jpeg`, `.png`, `.heic`) |
@@ -283,7 +323,12 @@ razonamiento de cada uno en [`comprobantes.sql`](./comprobantes.sql).
 El modelo es [`structure.py`](../structure.py) (`ComprobantePago`) y las
 consultas están en [`db/gestiones.py`](../db/gestiones.py)
 (`obtener_comprobantes_por_vencimientos`, `crear_comprobante_pago`,
-`obtener_comprobante_pago_por_id`).
+`obtener_comprobante_pago_por_id`, `dar_de_baja_comprobante_pago`).
+
+`active` es la baja lógica y **no se borra la fila**: el índice único parcial de
+`(vencimiento_id, subpath)` está definido con `WHERE active`, así que dar de baja
+es además lo que libera el nombre para que un comprobante nuevo pueda usar el
+mismo `subpath`.
 
 ## Estado del repo de comprobantes
 
@@ -331,3 +376,30 @@ curl -s -X POST http://localhost:5001/api/comprobantes/buscar \
   | while read -r p; do curl -s -o /dev/null -w "%{http_code} %{size_download} $p\n" \
       "http://localhost:5001/api/comprobantes/descargar?path=$p"; done
 ```
+
+Para la baja, contra la base y el repo reales (subir, dar de baja, y verificar
+las tres cosas que tienen que pasar):
+
+```bash
+# 1. alta -> 201, quedarse con el id
+curl -X POST http://localhost:5001/api/comprobantes \
+  -F 'vencimiento_id=<uuid>' -F 'base_path=<comprobantes_path>' \
+  -F 'subpath=2026/Octubre-smoke.pdf' -F 'file=@smoke.pdf'
+
+# 2. baja -> 200 con borrado:true
+curl -X DELETE http://localhost:5001/api/comprobantes/<id>
+
+# 3. la grilla ya no lo ve, el archivo ya no esta en el repo, y el nombre quedo
+#    libre para reutilizar (todo por el indice unico con WHERE active)
+curl -X POST http://localhost:5001/api/comprobantes/buscar \
+  -H 'Content-Type: application/json' -d '["<uuid>"]'
+python -c "import github; print(github.listar_paths())"
+
+# idempotencia y errores: id ya dado de baja -> 404, id inexistente -> 404,
+#                          id no-uuid -> 422
+curl -X DELETE http://localhost:5001/api/comprobantes/<id>
+```
+
+Caso que vale la probar a mano, porque es el que no aparece en el camino feliz:
+borrar el blob **por fuera** (con `github.borrar_archivo`) y después dar de baja
+el registro. Tiene que responder `200` con `borrado: false`, no un error.

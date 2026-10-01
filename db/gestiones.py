@@ -337,7 +337,21 @@ def eliminar_subcategoria(id: uuid.UUID):
 
 def obtener_comprobante_pago_por_id(id: uuid.UUID) -> Optional[ComprobantePago]:
     with Session(database.engine) as session:
-        return session.get(ComprobantePago, id)
+        return session.get(
+            ComprobantePago,
+            id,
+            options=[selectinload(ComprobantePago.vencimiento).selectinload(Vencimiento.subcategoria)],
+        )
+
+def dar_de_baja_comprobante_pago(id: uuid.UUID) -> Optional[ComprobantePago]:
+    with Session(database.engine) as session:
+        comprobante = session.get(ComprobantePago, id)
+        if comprobante is None:
+            return None
+        comprobante.active = False
+        session.commit()
+        session.refresh(comprobante)
+        return comprobante
 
 def crear_comprobante_pago(vencimientoId: uuid.UUID, subpath: str) -> ComprobantePago:
     """Alta de un comprobante ya subido al storage.
