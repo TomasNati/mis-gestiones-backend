@@ -155,8 +155,21 @@ def get_inversiones_historico(params: GetInversionesHistoricoParams):
     oficial, dólar CCL y dólar bolsa) cuando ese día existe precio del
     instrumento y cotización de dólar. Las que no pudieron valorizarse van en
     `inversiones_incompletas`.
+
+    Acepta filtros opcionales equivalentes a la barra de filtros: `tipo`,
+    `clase_renta` y `broker` (valores exactos, OR dentro de cada lista) y
+    `busqueda` (texto contenido en el nombre o código del instrumento). Se
+    combinan con AND. Los días con snapshot se mantienen aunque el filtro no
+    deje inversiones ese día.
     """
-    return obtener_historico_inversiones(desde=params.desde, hasta=params.hasta)
+    return obtener_historico_inversiones(
+        desde=params.desde,
+        hasta=params.hasta,
+        tipo=params.tipo,
+        clase_renta=params.clase_renta,
+        broker=params.broker,
+        busqueda=params.busqueda,
+    )
 
 
 @router.post("/inversiones/estado", response_model=list[InversionOut], tags=["Inversiones"])

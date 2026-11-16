@@ -11,7 +11,7 @@ from structure import (
 )
 from sqlalchemy.orm import Session, selectinload, with_loader_criteria
 from db.db import database
-from sqlalchemy import func, select, asc, desc
+from sqlalchemy import func, select, asc, desc, or_
 import models.inversiones as modelos
 
 
@@ -204,6 +204,10 @@ def obtener_fechas_historial_inversiones() -> Sequence[datetime]:
 def obtener_historico_inversiones(
         desde: datetime,
         hasta: datetime,
+        tipo: Optional[list[str]] = None,
+        clase_renta: Optional[list[str]] = None,
+        broker: Optional[list[str]] = None,
+        busqueda: Optional[str] = None,
 ) -> dict:
     """Inversiones activas entre dos fechas (inclusive), agrupadas por día.
 
@@ -214,7 +218,24 @@ def obtener_historico_inversiones(
     que les falta alguno van en una colección separada.
     """
     with Session(database.engine) as session:
-        inversiones = session.scalars(
+        # Días con snapshot dentro del rango: se calculan sin filtros para no
+        # perder días cuando el filtro no matchea ninguna inversión.
+        fechas_snapshot = session.scalars(
+            select(Inversion.fecha)
+            .where(
+                Inversion.active.is_(True),
+                Inversion.fecha.is_not(None),
+                func.date(Inversion.fecha) >= func.date(desde),
+                func.date(Inversion.fecha) <= func.date(hasta),
+            )
+            .distinct()
+        ).all()
+        dias = sorted(
+            {fecha.date() for fecha in fechas_snapshot if fecha is not None},
+            reverse=True,
+        )
+
+        query = (
             select(Inversion)
             .options(selectinload(Inversion.instrumento))
             .where(
@@ -224,7 +245,25 @@ def obtener_historico_inversiones(
                 func.date(Inversion.fecha) <= func.date(hasta),
             )
             .order_by(Inversion.fecha.desc())
-        ).all()
+        )
+        if broker:
+            query = query.where(Inversion.broker.in_(broker))
+        if tipo or clase_renta or busqueda:
+            query = query.join(Instrumento, Inversion.instrumentoId == Instrumento.id)
+        if tipo:
+            query = query.where(Instrumento.tipo.in_(tipo))
+        if clase_renta:
+            query = query.where(Instrumento.clase_renta.in_(clase_renta))
+        if busqueda:
+            patron = f"%{busqueda}%"
+            query = query.where(
+                or_(
+                    Instrumento.nombre.ilike(patron),
+                    Instrumento.codigo.ilike(patron),
+                )
+            )
+
+        inversiones = session.scalars(query).all()
 
         dolares = session.scalars(
             select(DolarHistorico)
@@ -262,10 +301,10 @@ def obtener_historico_inversiones(
 
     por_fecha: list[dict] = []
     incompletas: list[dict] = []
-    for dia in sorted(inversiones_por_dia.keys(), reverse=True):
+    for dia in dias:
         dolar = dolar_por_dia.get(dia)
         valorizadas: list[dict] = []
-        for inv in inversiones_por_dia[dia]:
+        for inv in inversiones_por_dia.get(dia, []):
             precio = precio_por_dia.get((str(inv.instrumentoId), dia))
             if precio is None or dolar is None:
                 incompletas.append({

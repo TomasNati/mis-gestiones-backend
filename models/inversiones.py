@@ -272,9 +272,40 @@ class GetDolaresHistoricosParams(BaseModel):
 
 
 class GetInversionesHistoricoParams(BaseModel):
-    """Historico de inversiones entre dos fechas (inclusive)."""
+    """Historico de inversiones entre dos fechas (inclusive).
+    """
     desde: datetime = Field(description="Fecha inicial (inclusive)")
     hasta: datetime = Field(description="Fecha final (inclusive)")
+    tipo: Optional[list[str]] = Field(
+        None, description="Tipos de instrumento exactos a incluir"
+    )
+    clase_renta: Optional[list[str]] = Field(
+        None, description="Tipos de renta exactos a incluir"
+    )
+    broker: Optional[list[str]] = Field(
+        None, description="Brokers exactos a incluir"
+    )
+    busqueda: Optional[str] = Field(
+        None, description="Texto contenido en el nombre o código del instrumento"
+    )
+
+    @field_validator("tipo", "clase_renta", "broker", mode="before")
+    @classmethod
+    def descartar_vacios(cls, v):
+        if v is None:
+            return None
+        if isinstance(v, str):
+            v = [v]
+        valores = [str(valor).strip() for valor in v if valor is not None and str(valor).strip()]
+        return valores or None
+
+    @field_validator("busqueda")
+    @classmethod
+    def normalizar_busqueda(cls, v: Optional[str]):
+        if v is None:
+            return None
+        v = v.strip()
+        return v or None
 
     class Config:
         from_attributes = True
