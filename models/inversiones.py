@@ -2,19 +2,24 @@ from datetime import datetime
 from typing import Optional
 from uuid import UUID
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import AliasChoices, BaseModel, Field, field_validator
 
 from enums import InstrumentoTipo, ClaseRenta, Moneda
 
 class InstrumentoCrear(BaseModel):
     nombre: str
     codigo: Optional[str] = None
+    nombreCorto: str = Field(
+        validation_alias=AliasChoices("nombreCorto", "nombre_corto"),
+        description="Nombre corto que se muestra en la UI en lugar del código",
+    )
     tipo: InstrumentoTipo
     clase_renta: ClaseRenta
     moneda: Moneda
 
     class Config:
         from_attributes = True
+        populate_by_name = True
 
 
 class InstrumentoOut(InstrumentoCrear):
@@ -69,12 +74,14 @@ class InstrumentoSimple(BaseModel):
     id: UUID
     nombre: str
     codigo: Optional[str] = None
+    nombreCorto: str = Field(validation_alias=AliasChoices("nombreCorto", "nombre_corto"))
     tipo: str
     clase_renta: str
     moneda: str
 
     class Config:
         from_attributes = True
+        populate_by_name = True
 
 
 class InversionCrear(BaseModel):
@@ -285,11 +292,14 @@ class GetInversionesHistoricoParams(BaseModel):
     broker: Optional[list[str]] = Field(
         None, description="Brokers exactos a incluir"
     )
+    moneda: Optional[list[str]] = Field(
+        None, description="Monedas exactas del instrumento a incluir"
+    )
     busqueda: Optional[str] = Field(
         None, description="Texto contenido en el nombre o código del instrumento"
     )
 
-    @field_validator("tipo", "clase_renta", "broker", mode="before")
+    @field_validator("tipo", "clase_renta", "broker", "moneda", mode="before")
     @classmethod
     def descartar_vacios(cls, v):
         if v is None:

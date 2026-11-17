@@ -108,6 +108,7 @@ class Instrumento(Base):
     id: Mapped[str] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     nombre: Mapped[str] = mapped_column(String(256))
     codigo: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    nombre_corto: Mapped[str] = mapped_column(String(50))
     tipo: Mapped[str] = mapped_column(String(30))
     clase_renta: Mapped[str] = mapped_column("clase_renta", String(10))
 

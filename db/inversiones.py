@@ -25,6 +25,7 @@ def crear_instrumento(instr: modelos.InstrumentoCrear) -> Instrumento:
         instrumento = Instrumento(
             nombre=instr.nombre,
             codigo=instr.codigo,
+            nombre_corto=instr.nombreCorto,
             tipo=tipo_val,
             clase_renta=clase_val,
             moneda=moneda_val
@@ -67,6 +68,7 @@ def actualizar_instrumento(id: uuid.UUID, instrumento_update: modelos.Instrument
         if ins:
             ins.nombre = instrumento_update.nombre
             ins.codigo = instrumento_update.codigo
+            ins.nombre_corto = instrumento_update.nombreCorto
             # Accept Enum or raw string
             ins.tipo = instrumento_update.tipo.value if hasattr(instrumento_update.tipo, 'value') else instrumento_update.tipo
             ins.clase_renta = instrumento_update.clase_renta.value if hasattr(instrumento_update.clase_renta, 'value') else instrumento_update.clase_renta
@@ -207,6 +209,7 @@ def obtener_historico_inversiones(
         tipo: Optional[list[str]] = None,
         clase_renta: Optional[list[str]] = None,
         broker: Optional[list[str]] = None,
+        moneda: Optional[list[str]] = None,
         busqueda: Optional[str] = None,
 ) -> dict:
     """Inversiones activas entre dos fechas (inclusive), agrupadas por día.
@@ -248,12 +251,14 @@ def obtener_historico_inversiones(
         )
         if broker:
             query = query.where(Inversion.broker.in_(broker))
-        if tipo or clase_renta or busqueda:
+        if tipo or clase_renta or moneda or busqueda:
             query = query.join(Instrumento, Inversion.instrumentoId == Instrumento.id)
         if tipo:
             query = query.where(Instrumento.tipo.in_(tipo))
         if clase_renta:
             query = query.where(Instrumento.clase_renta.in_(clase_renta))
+        if moneda:
+            query = query.where(Instrumento.moneda.in_(moneda))
         if busqueda:
             patron = f"%{busqueda}%"
             query = query.where(

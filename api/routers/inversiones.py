@@ -157,10 +157,10 @@ def get_inversiones_historico(params: GetInversionesHistoricoParams):
     `inversiones_incompletas`.
 
     Acepta filtros opcionales equivalentes a la barra de filtros: `tipo`,
-    `clase_renta` y `broker` (valores exactos, OR dentro de cada lista) y
-    `busqueda` (texto contenido en el nombre o código del instrumento). Se
-    combinan con AND. Los días con snapshot se mantienen aunque el filtro no
-    deje inversiones ese día.
+    `clase_renta`, `moneda` y `broker` (valores exactos, OR dentro de cada
+    lista) y `busqueda` (texto contenido en el nombre o código del
+    instrumento). Se combinan con AND. Los días con snapshot se mantienen
+    aunque el filtro no deje inversiones ese día.
     """
     return obtener_historico_inversiones(
         desde=params.desde,
@@ -168,6 +168,7 @@ def get_inversiones_historico(params: GetInversionesHistoricoParams):
         tipo=params.tipo,
         clase_renta=params.clase_renta,
         broker=params.broker,
+        moneda=params.moneda,
         busqueda=params.busqueda,
     )
 
